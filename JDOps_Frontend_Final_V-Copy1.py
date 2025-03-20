@@ -85,11 +85,11 @@ class JobDescriptionAgent:
         # Get AWS credentials from environment variables or use a proper credential provider
         # SECURITY: Replace hardcoded credentials with proper credential management
         self.client = boto3.client(
-                service_name='bedrock-runtime',
-                aws_access_key_id='',
-                aws_secret_access_key='',
-                region_name='us-east-1',
-            )
+            service_name='bedrock-runtime',
+            aws_access_key_id=st.secrets["aws"]["access_key"],
+            aws_secret_access_key=st.secrets["aws"]["secret_key"],
+            region_name=st.secrets["aws"]["region"],
+        )
 
     def generate_initial_descriptions(self, job_description):
         """Generate detailed and structured job descriptions based on the given job description."""
