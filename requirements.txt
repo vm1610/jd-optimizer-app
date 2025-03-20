@@ -1,11 +1,8 @@
 streamlit
 boto3
 pandas
-docx
 python-docx
 nltk
 plotly
 scikit-learn
-datetime
 numpy
-re
