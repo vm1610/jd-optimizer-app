@@ -222,7 +222,6 @@ class JobDescriptionAgent:
         self.max_tokens = max_tokens
         self.temperature = temperature
         
-        # Initialize AWS client for Bedrock
         try:
             # SECURITY: Replace hardcoded credentials with proper credential management
             self.client = boto3.client(
@@ -232,9 +231,9 @@ class JobDescriptionAgent:
                 region_name=st.secrets["aws"]["region"],
             )
         except Exception as e:
+            st.error(f"AWS Bedrock client initialization failed: {e}")
             print(f"Error initializing AWS Bedrock client: {e}")
             self.client = None
-
     def generate_initial_descriptions(self, job_description):
         """Generate detailed and structured job descriptions based on the given job description."""
         # If client is not initialized properly, return dummy versions
