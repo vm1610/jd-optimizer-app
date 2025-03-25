@@ -97,7 +97,7 @@ custom_css = """
         background-color: #F3F4F6;
         padding-top: 2rem;
     }
-    
+    /*
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
     }
@@ -119,7 +119,7 @@ custom_css = """
     
     .stTabs [data-baseweb="tab-list"] button[aria-selected="true"] {
         background-color: #DBEAFE;
-    }
+    }*/
 </style>
 """
 
