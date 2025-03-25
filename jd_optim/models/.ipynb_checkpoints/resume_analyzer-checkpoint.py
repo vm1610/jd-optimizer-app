@@ -102,29 +102,86 @@ class ResumeAnalyzer:
             'low_matches': low_matches
         }
     
-    def load_resume_data(self, jd_type):
+    def load_resume_data(self, jd_type=None):
         """
-        Load the appropriate resume data based on the JD type
+        Load resume data by letting the user select from available files
         
         Args:
-            jd_type (str): Type of job description
+            jd_type (str, optional): Type of job description (used only for display)
             
         Returns:
             DataFrame: DataFrame containing resume data
         """
         try:
-            if jd_type == 'java_developer':
-                resume_df = pd.read_csv('Exctracted Resumes/resumes_analysis_outputJDJavaDeveloper.csv')
-            elif jd_type == 'data_engineer':
-                resume_df = pd.read_csv('Exctracted Resumes/resumes_analysis_output_JDDataEngineer.csv')
-            else:
-                # Try to load a generic file
-                resume_df = pd.read_csv('resumes_analysis_output.csv')
+            # Check if "Extracted Resumes" directory exists (with correct spelling)
+            extracted_dir = "Extracted Resumes"
+            if not os.path.exists(extracted_dir):
+                # Try alternative spellings
+                alternative_dirs = ["Exctracted Resumes", "ExtractedResumes", "Resumes"]
+                for alt_dir in alternative_dirs:
+                    if os.path.exists(alt_dir):
+                        extracted_dir = alt_dir
+                        break
             
+            # Get all CSV files in the directory
+            if os.path.exists(extracted_dir):
+                resume_files = [f for f in os.listdir(extracted_dir) if f.endswith('.csv')]
+            else:
+                # Look for CSV files in current directory if no resume folder exists
+                resume_files = [f for f in os.listdir() if f.endswith('.csv')]
+            
+            if not resume_files:
+                st.warning(f"No resume CSV files found. Please add resume files to continue.")
+                return None
+            
+            # Let user select a file from dropdown
+            selected_file = st.selectbox(
+                "Select Resume Data File:",
+                options=resume_files,
+                help="Choose a CSV file containing resume data"
+            )
+            
+            # Determine the full path to the selected file
+            if os.path.exists(extracted_dir) and os.path.exists(os.path.join(extracted_dir, selected_file)):
+                file_path = os.path.join(extracted_dir, selected_file)
+            else:
+                file_path = selected_file
+                
+            # Read the selected CSV file
+            resume_df = pd.read_csv(file_path)
             return resume_df
+        
         except Exception as e:
-            print(f"Error loading resume data for {jd_type}: {e}")
-            return None
+            st.error(f"Error loading resume data: {e}")
+            
+            # Create and return sample data instead
+            st.info("Using sample resume data instead")
+            sample_resume_data = {
+                'File Name': ['Resume_1', 'Resume_2', 'Resume_3', 'Resume_4', 'Resume_5'],
+                'Skills': [
+                    'Python, Java, Data Analysis, Machine Learning', 
+                    'Java, Python, SQL, REST API',
+                    'C#, .NET, Azure, Cloud Computing',
+                    'Java, Spring, Hibernate, SQL, REST',
+                    'Python, ML, AI, Deep Learning, SQL'
+                ],
+                'Tools': [
+                    'TensorFlow, Scikit-learn, Docker, Git', 
+                    'IntelliJ, Eclipse, Git, Maven',
+                    'Visual Studio, Git, Azure DevOps',
+                    'Jenkins, Maven, Docker, Kubernetes',
+                    'Pandas, NumPy, Jupyter, Keras'
+                ],
+                'Certifications': [
+                    'AWS Machine Learning Specialty', 
+                    'Oracle Java Professional',
+                    'Microsoft Azure Developer',
+                    'AWS Developer Associate',
+                    'Google Professional Data Engineer'
+                ]
+            }
+            return pd.DataFrame(sample_resume_data)
+            
     
     def get_resume_details(self, resume_id, resume_df):
         """

@@ -7,6 +7,7 @@ from utils.text_processing import detect_jd_type
 from utils.visualization import create_distribution_chart, create_radar_chart
 from ui.common import display_section_header, display_subsection_header, display_info_message, display_warning_message
 
+# In ui/candidate_ranking.py
 def render_candidate_ranking_page():
     """Render the candidate ranking page"""
     
@@ -62,60 +63,44 @@ def render_candidate_ranking_page():
             st.markdown(f"**Skills:** {job_desc['Skills']}")
             st.markdown(f"**Tools:** {job_desc['Tools']}")
         
-        # Try to load resume data based on the selected job type
+        # Let user select resume data file (this will show the dropdown)
         resume_df = resume_analyzer.load_resume_data(jd_type)
         
-        # Analyze button
-        if st.button('🔍 Analyze Resumes', type="primary"):
-            with st.spinner('Analyzing resumes...'):
-                try:
-                    categorized_resumes = resume_analyzer.categorize_resumes(job_desc, resume_df)
-                    st.session_state['analysis_results'] = categorized_resumes
-                except Exception as e:
-                    st.error(f"Error during analysis: {str(e)}")
-                    # Create dummy results for demonstration
-                    all_resumes = []
-                    for i in range(len(resume_df)):
-                        score = np.random.uniform(0.1, 0.4)
-                        all_resumes.append({
-                            'Resume ID': resume_df.iloc[i]['File Name'],
-                            'Skills': resume_df.iloc[i]['Skills'],
-                            'Tools': resume_df.iloc[i]['Tools'],
-                            'Certifications': resume_df.iloc[i]['Certifications'],
-                            'Score': score
-                        })
-                    
-                    # Sort by score
-                    all_resumes.sort(key=lambda x: x['Score'], reverse=True)
-                    
-                    # Categorize
-                    high_matches = [r for r in all_resumes if r['Score'] >= 0.25]
-                    medium_matches = [r for r in all_resumes if 0.2 <= r['Score'] < 0.25]
-                    low_matches = [r for r in all_resumes if r['Score'] < 0.2]
-                    
-                    st.session_state['analysis_results'] = {
-                        'top_3': all_resumes[:3],
-                        'high_matches': high_matches,
-                        'medium_matches': medium_matches,
-                        'low_matches': low_matches
-                    }
-
-    if 'analysis_results' in st.session_state:
-        categorized_resumes = st.session_state['analysis_results']
-        
-        with col2:
-            display_subsection_header("Overview")
-            # Distribution chart
-            try:
-                chart = create_distribution_chart(categorized_resumes)
-                st.plotly_chart(chart, use_container_width=True)
-            except Exception as e:
-                st.error(f"Error creating distribution chart: {str(e)}")
-                st.bar_chart({
-                    'High Match': [len(categorized_resumes['high_matches'])],
-                    'Medium Match': [len(categorized_resumes['medium_matches'])],
-                    'Low Match': [len(categorized_resumes['low_matches'])]
-                })
+        # Analyze button (only enable if resume_df is available)
+        if resume_df is not None:
+            if st.button('🔍 Analyze Resumes', type="primary"):
+                with st.spinner('Analyzing resumes...'):
+                    try:
+                        categorized_resumes = resume_analyzer.categorize_resumes(job_desc, resume_df)
+                        st.session_state['analysis_results'] = categorized_resumes
+                    except Exception as e:
+                        st.error(f"Error during analysis: {str(e)}")
+                        # Create dummy results using the available resume_df
+                        all_resumes = []
+                        for i in range(len(resume_df)):
+                            score = np.random.uniform(0.1, 0.4)
+                            all_resumes.append({
+                                'Resume ID': resume_df.iloc[i]['File Name'],
+                                'Skills': resume_df.iloc[i]['Skills'],
+                                'Tools': resume_df.iloc[i]['Tools'],
+                                'Certifications': resume_df.iloc[i]['Certifications'],
+                                'Score': score
+                            })
+                        
+                        # Sort by score
+                        all_resumes.sort(key=lambda x: x['Score'], reverse=True)
+                        
+                        # Categorize
+                        high_matches = [r for r in all_resumes if r['Score'] >= 0.25]
+                        medium_matches = [r for r in all_resumes if 0.2 <= r['Score'] < 0.25]
+                        low_matches = [r for r in all_resumes if r['Score'] < 0.2]
+                        
+                        st.session_state['analysis_results'] = {
+                            'top_3': all_resumes[:3],
+                            'high_matches': high_matches,
+                            'medium_matches': medium_matches,
+                            'low_matches': low_matches
+                        }
             
             # Top 3 Quick View
             display_subsection_header("Top Matches")
