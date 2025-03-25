@@ -141,9 +141,6 @@ def render_jd_enhance_page(logger, analyzer, agent):
                 logger.log_versions_generated(versions)
                 st.rerun()
 
-        # Display enhanced versions and their analysis
-        if 'enhanced_versions' in st.session_state and len(st.session_state.enhanced_versions) >= 3:
-            # Analyze all versions
             original_scores = analyzer.analyze_text(original_jd)
             intermediate_scores = {
                 f'Version {i+1}': analyzer.analyze_text(version)
@@ -196,16 +193,3 @@ def render_jd_enhance_page(logger, analyzer, agent):
                         key="intermediate_comparison"
                     )
                     st.caption("Percentages indicate keyword coverage in each category")
-                    
-           """ # After reviewing enhanced versions, add button to continue to refinement phase
-            display_section_header("Next Steps")
-            
-            next_col1, next_col2 = st.columns([1, 1])
-            
-            with next_col1:
-                if st.button("Continue to Feedback & Refinement", type="primary"):
-                    st.session_state.current_page = "jd_refine"
-                    st.rerun()
-            
-            with next_col2:
-                st.caption("Select this option to provide feedback and further refine your selected version.")
