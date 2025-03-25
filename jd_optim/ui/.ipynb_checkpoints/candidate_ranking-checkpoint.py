@@ -64,7 +64,7 @@ def render_candidate_ranking_page():
             st.markdown(f"**Tools:** {job_desc['Tools']}")
         
         # Let user select resume data file (this will show the dropdown)
-        resume_df = resume_analyzer.load_resume_data(jd_type)
+        resume_df = resume_analyzer.load_resume_data('Extracted Resumes')
         
         # Analyze button (only enable if resume_df is available)
         if resume_df is not None:
