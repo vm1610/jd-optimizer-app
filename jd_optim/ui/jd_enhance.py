@@ -57,11 +57,12 @@ def render_jd_enhance_page(logger, analyzer, agent):
                 
                 # Read the job description
                 if 'original_jd' not in st.session_state:
-                    st.session_state.original_jd = read_job_description(file_path)
+                    content = read_job_description(file_path)  # Store the result in a variable
+                    st.session_state.original_jd = content
                     
                     # Log file selection (only if changed)
                     if logger.current_state["selected_file"] != selected_file:
-                        logger.log_file_selection(selected_file, content)
+                        logger.log_file_selection(selected_file, content)  # Now content is defined
             except Exception as e:
                 st.error(f"Error reading file: {str(e)}")
                 return
