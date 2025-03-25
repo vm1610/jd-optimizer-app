@@ -57,12 +57,11 @@ def render_jd_enhance_page(logger, analyzer, agent):
                 
                 # Read the job description
                 if 'original_jd' not in st.session_state:
-                    content = read_job_description(file_path)  # Store the content in a variable first
-                    st.session_state.original_jd = content
+                    st.session_state.original_jd = read_job_description(file_path)
                     
                     # Log file selection (only if changed)
                     if logger.current_state["selected_file"] != selected_file:
-                        logger.log_file_selection(selected_file, content)  # Now content is defined
+                        logger.log_file_selection(selected_file, content)
             except Exception as e:
                 st.error(f"Error reading file: {str(e)}")
                 return
@@ -197,15 +196,3 @@ def render_jd_enhance_page(logger, analyzer, agent):
                     )
                     st.caption("Percentages indicate keyword coverage in each category")
                     
-           """ # After reviewing enhanced versions, add button to continue to refinement phase
-            display_section_header("Next Steps")
-            
-            next_col1, next_col2 = st.columns([1, 1])
-            
-            with next_col1:
-                if st.button("Continue to Feedback & Refinement", type="primary"):
-                    st.session_state.current_page = "jd_refine"
-                    st.rerun()
-            
-            with next_col2:
-                st.caption("Select this option to provide feedback and further refine your selected version.")"""
