@@ -54,9 +54,6 @@ def render_jd_enhance_page(logger, analyzer, agent):
                     st.session_state.pop('enhanced_versions', None)
                     st.session_state.pop('original_jd', None)
                     st.session_state.reload_flag = True
-                
-                # Read the job description
-                if 'original_jd' not in st.session_state:
                     content = read_job_description(file_path)  # Store the result in a variable
                     st.session_state.original_jd = content
                     
