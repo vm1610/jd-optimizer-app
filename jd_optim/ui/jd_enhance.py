@@ -197,4 +197,15 @@ def render_jd_enhance_page(logger, analyzer, agent):
                     )
                     st.caption("Percentages indicate keyword coverage in each category")
                     
+           """ # After reviewing enhanced versions, add button to continue to refinement phase
+            display_section_header("Next Steps")
             
+            next_col1, next_col2 = st.columns([1, 1])
+            
+            with next_col1:
+                if st.button("Continue to Feedback & Refinement", type="primary"):
+                    st.session_state.current_page = "jd_refine"
+                    st.rerun()
+            
+            with next_col2:
+                st.caption("Select this option to provide feedback and further refine your selected version.")
