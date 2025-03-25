@@ -141,6 +141,9 @@ def render_jd_enhance_page(logger, analyzer, agent):
                 logger.log_versions_generated(versions)
                 st.rerun()
 
+        # Display enhanced versions and their analysis
+        if 'enhanced_versions' in st.session_state and len(st.session_state.enhanced_versions) >= 3:
+            # Analyze all versions
             original_scores = analyzer.analyze_text(original_jd)
             intermediate_scores = {
                 f'Version {i+1}': analyzer.analyze_text(version)
