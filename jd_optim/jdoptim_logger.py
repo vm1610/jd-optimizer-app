@@ -112,19 +112,14 @@ class JDOptimLogger:
         Args:
             version_index: Index of the selected version (0-based)
         """
-         if "enhanced_versions" not in self.current_state:
-            self.current_state["enhanced_versions"] = []
-            
-        # Only log if versions have changed or are not set
-        if self.current_state["enhanced_versions"] != versions:
-            self.current_state["enhanced_versions"] = versions
-            self.current_state["actions"].append({
-                "action": "versions_generated",
-                "version_count": len(versions),
-                "username": self.username,
-                "timestamp": datetime.datetime.now().isoformat()
-            })
-            self._save_state()
+        self.current_state["selected_version"] = version_index
+        self.current_state["actions"].append({
+            "action": "version_selected",
+            "version_index": version_index,
+            "username": self.username,
+            "timestamp": datetime.datetime.now().isoformat()
+        })
+        self._save_state()
 
     
     def log_feedback(self, feedback):
