@@ -1,5 +1,7 @@
+import os
 import numpy as np
 import pandas as pd
+import streamlit as st
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from utils.text_processing import extract_skills, preprocess_text
@@ -181,7 +183,6 @@ class ResumeAnalyzer:
                 ]
             }
             return pd.DataFrame(sample_resume_data)
-            
     
     def get_resume_details(self, resume_id, resume_df):
         """

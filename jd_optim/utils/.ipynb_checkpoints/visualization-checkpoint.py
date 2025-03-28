@@ -6,18 +6,20 @@ def create_radar_chart(resume, job_desc):
     """Create a radar chart for skill matching visualization"""
     categories = ['Technical Skills', 'Tools Proficiency', 'Certifications']
     
-    resume_skills = set(str(resume['Skills']).lower().split())
-    resume_tools = set(str(resume['Tools']).lower().split())
-    resume_certs = set(str(resume['Certifications']).lower().split())
+    # Safely convert values to strings and handle missing values
+    resume_skills = set(str(resume.get('Skills', '')).lower().split(', '))
+    resume_tools = set(str(resume.get('Tools', '')).lower().split(', '))
+    resume_certs = set(str(resume.get('Certifications', '')).lower().split(', '))
     
-    job_skills = set(str(job_desc['Skills']).lower().split())
-    job_tools = set(str(job_desc['Tools']).lower().split())
+    job_skills = set(str(job_desc.get('Skills', '')).lower().split(', '))
+    job_tools = set(str(job_desc.get('Tools', '')).lower().split(', '))
     
-    scores = [
-        len(resume_skills & job_skills) / max(len(job_skills), 1),
-        len(resume_tools & job_tools) / max(len(job_tools), 1),
-        len(resume_certs) / 10  # Normalize certification count
-    ]
+    # Calculate scores with more robust handling
+    skill_score = len(resume_skills.intersection(job_skills)) / max(len(job_skills), 1) if job_skills else 0
+    tools_score = len(resume_tools.intersection(job_tools)) / max(len(job_tools), 1) if job_tools else 0
+    cert_score = min(len(resume_certs) / 10, 1.0)  # Normalize certification count (capped at 1.0)
+    
+    scores = [skill_score, tools_score, cert_score]
     
     fig = go.Figure()
     fig.add_trace(go.Scatterpolar(

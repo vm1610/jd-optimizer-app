@@ -59,7 +59,13 @@ def init_session_state():
         st.session_state.active_tab = "JD Versions"
         
     if 'analysis_results' not in st.session_state:
-        st.session_state.analysis_results = None
+        # Initialize with empty structure to avoid reference errors
+        st.session_state.analysis_results = {
+            'top_3': [],
+            'high_matches': [],
+            'medium_matches': [],
+            'low_matches': []
+        }
 
 def get_or_create_logger():
     """Get existing logger from session state or create a new one"""
@@ -120,28 +126,12 @@ def main():
     agent = JobDescriptionAgent(model_id="anthropic.claude-3-haiku-20240307-v1:0")
     
     # Render the appropriate content based on active tab
-    if st.session_state.active_tab == "JD Versions":
-        # For JD Versions tab, render either the enhance or refine page based on current state
-        if st.session_state.current_page == "jd_enhance":
-            render_jd_enhance_page(logger, analyzer, agent)
-        else:  # "jd_refine"
-            render_jd_refine_page(logger, analyzer, agent)
-    elif st.session_state.active_tab == "Feedback Loop":
-        render_jd_refine_page(logger, analyzer, agent)  # Use the same function for feedback loop
-    elif st.session_state.active_tab == "Candidate Ranking":
-        render_candidate_ranking_page()
-    elif st.session_state.active_tab == "Interview Prep":
-        render_interview_prep_page()
-    
-    # Footer with company info
-    st.markdown("---")
-    footer_col1, footer_col2 = st.columns([4, 1])
-    
-    with footer_col1:
-        st.caption("JD Agent | Made by Apexon")
-    
-    with footer_col2:
-        st.caption(f"v2.0 - {datetime.datetime.now().strftime('%Y')}")
-
-if __name__ == "__main__":
-    main()
+    try:
+        if st.session_state.active_tab == "JD Versions":
+            # For JD Versions tab, render either the enhance or refine page based on current state
+            if st.session_state.current_page == "jd_enhance":
+                render_jd_enhance_page(logger, analyzer, agent)
+            else:  # "jd_refine"
+                render_jd_refine_page(logger, analyzer, agent)
+        elif st.session_state.active_tab == "Feedback Loop":
+            render_jd_refine_page
