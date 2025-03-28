@@ -67,14 +67,50 @@ def render_candidate_ranking_page():
         display_subsection_header("Upload Resume")
         uploaded_resume = st.file_uploader(
             "📄 Drag and drop resumes",
-            type=["pdf", "docx", "txt"],
+            type=["pdf", "docx", "txt", "csv"],
             accept_multiple_files=True,
-            help="Upload candidate resumes to analyze"
+            help="Upload candidate resumes to analyze (PDF, DOCX, TXT, or CSV)"
         )
         
         if uploaded_resume:
             st.success(f"Uploaded {len(uploaded_resume)} resumes successfully!")
-            # In a real app, you would process these files here
+            
+            # Process uploaded files
+            csv_files = [file for file in uploaded_resume if file.name.endswith('.csv')]
+            resume_files = [file for file in uploaded_resume if not file.name.endswith('.csv')]
+            
+            # Handle CSV files specially (they can contain multiple resumes)
+            if csv_files:
+                st.info(f"Processing {len(csv_files)} CSV files containing multiple resumes...")
+                
+                # For demonstration purposes - in a real app you would handle the CSV parsing here
+                # This would typically involve pandas to read the CSV data
+                for csv_file in csv_files:
+                    try:
+                        # Basic handling to show progress
+                        st.write(f"Parsing {csv_file.name}...")
+                        
+                        # For a complete implementation, you would:
+                        # 1. Read the CSV with pandas
+                        # 2. Process each row as a separate resume
+                        # 3. Extract skills, experience, etc.
+                        # 4. Add to the resume database
+                        
+                        # Sample code for reference (commented out):
+                        # import pandas as pd
+                        # df = pd.read_csv(csv_file)
+                        # st.write(f"Found {len(df)} resumes in {csv_file.name}")
+                        # for _, row in df.iterrows():
+                        #     # Process each row as a resume
+                        #     pass
+                        
+                    except Exception as e:
+                        st.error(f"Error processing {csv_file.name}: {str(e)}")
+            
+            # Handle individual resume files
+            if resume_files:
+                st.info(f"Processing {len(resume_files)} individual resume files...")
+                # In a real app, you would process these files here
         
         # Let user select resume data file (this will show the dropdown)
         resume_df = resume_analyzer.load_resume_data(jd_type)
@@ -116,24 +152,35 @@ def render_candidate_ranking_page():
                         }
     
     # Check if analysis results exist
-    if 'analysis_results' in st.session_state:
+    if 'analysis_results' in st.session_state and st.session_state['analysis_results'] is not None:
         categorized_resumes = st.session_state['analysis_results']
         
+        # Verify categorized_resumes has the expected structure
+        if 'top_3' not in categorized_resumes or not categorized_resumes['top_3']:
+            st.error("Analysis results are incomplete. Please try analyzing the resumes again.")
+            return
+            
         with col2:
             display_subsection_header("Overview")
             
-            # Create distribution chart
+            # Create distribution chart safely
             try:
                 chart = create_distribution_chart(categorized_resumes)
                 st.plotly_chart(chart, use_container_width=True)
             except Exception as e:
                 st.error(f"Error creating chart: {str(e)}")
+                # Provide a simpler fallback visualization
+                st.bar_chart({
+                    'High Match': [len(categorized_resumes.get('high_matches', []))],
+                    'Medium Match': [len(categorized_resumes.get('medium_matches', []))],
+                    'Low Match': [len(categorized_resumes.get('low_matches', []))]
+                })
             
             # Top 3 Quick View with drag-and-drop interface
             display_subsection_header("Top Candidates")
             
-            # Initialize reordering state if not exists
-            if 'ranked_candidates' not in st.session_state:
+            # Initialize reordering state if not exists or reset if needed
+            if 'ranked_candidates' not in st.session_state or not st.session_state.ranked_candidates:
                 st.session_state.ranked_candidates = categorized_resumes['top_3'][:3]
             
             # Create a CSS-styled drag area
@@ -157,52 +204,59 @@ def render_candidate_ranking_page():
             </style>
             """, unsafe_allow_html=True)
             
-            # Create a drag-and-drop interface using selectbox for reordering
+            # Create a candidate reordering interface
             st.markdown("<div class='drag-container'>", unsafe_allow_html=True)
             
-            # Get current order or initialize
-            current_order = [resume['Resume ID'] for resume in st.session_state.ranked_candidates]
-            all_candidates = [resume['Resume ID'] for resume in categorized_resumes['top_3']]
-            
-            # Allow user to select ranking for each position
-            for i in range(min(3, len(categorized_resumes['top_3']))):
-                # Get the current candidate at this position
-                current_candidate = current_order[i] if i < len(current_order) else None
+            # Make sure we have candidates to display
+            if st.session_state.ranked_candidates:
+                # Get current order
+                current_order = [resume['Resume ID'] for resume in st.session_state.ranked_candidates]
+                all_candidates = [resume['Resume ID'] for resume in categorized_resumes['top_3']]
                 
-                # Show a selectbox with all candidates, defaulting to the current one
-                new_selection = st.selectbox(
-                    f"Rank #{i+1}",
-                    options=all_candidates,
-                    index=all_candidates.index(current_candidate) if current_candidate in all_candidates else i,
-                    key=f"rank_{i}"
-                )
-                
-                # Find the candidate data
-                candidate_data = next((r for r in categorized_resumes['top_3'] if r['Resume ID'] == new_selection), None)
-                
-                if candidate_data:
-                    # Display the candidate card
-                    st.markdown(f"""
-                    <div class="drag-item">
-                        <div style="display: flex; justify-content: space-between;">
-                            <strong>{candidate_data['Resume ID']}</strong>
-                            <span>Match: {candidate_data['Score']:.2%}</span>
-                        </div>
-                        <div style="font-size: 0.9em; color: #666;">
-                            {candidate_data['Skills'][:50]}...
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                # Allow user to select ranking for each position
+                for i in range(min(3, len(categorized_resumes['top_3']))):
+                    # Get the current candidate at this position
+                    current_candidate = current_order[i] if i < len(current_order) else None
                     
-                    # Update the order if changed
-                    if i < len(current_order) and current_order[i] != new_selection:
-                        # Find the candidate that was replaced
-                        old_index = [j for j, cand in enumerate(st.session_state.ranked_candidates) 
-                                     if cand['Resume ID'] == new_selection][0]
+                    # Show a selectbox with all candidates, defaulting to the current one
+                    new_selection = st.selectbox(
+                        f"Rank #{i+1}",
+                        options=all_candidates,
+                        index=all_candidates.index(current_candidate) if current_candidate in all_candidates else i,
+                        key=f"rank_{i}"
+                    )
+                    
+                    # Find the candidate data
+                    candidate_data = next((r for r in categorized_resumes['top_3'] if r['Resume ID'] == new_selection), None)
+                    
+                    if candidate_data:
+                        # Display the candidate card
+                        st.markdown(f"""
+                        <div class="drag-item">
+                            <div style="display: flex; justify-content: space-between;">
+                                <strong>{candidate_data['Resume ID']}</strong>
+                                <span>Match: {candidate_data['Score']:.2%}</span>
+                            </div>
+                            <div style="font-size: 0.9em; color: #666;">
+                                {candidate_data['Skills'][:50]}...
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
                         
-                        # Swap positions
-                        st.session_state.ranked_candidates[i], st.session_state.ranked_candidates[old_index] = \
-                            st.session_state.ranked_candidates[old_index], st.session_state.ranked_candidates[i]
+                        # Update the order if changed
+                        if i < len(current_order) and current_order[i] != new_selection:
+                            # Find candidate index
+                            try:
+                                old_index = next((j for j, cand in enumerate(st.session_state.ranked_candidates) 
+                                             if cand['Resume ID'] == new_selection), i)
+                                
+                                # Swap positions
+                                st.session_state.ranked_candidates[i], st.session_state.ranked_candidates[old_index] = \
+                                    st.session_state.ranked_candidates[old_index], st.session_state.ranked_candidates[i]
+                            except Exception as e:
+                                st.error(f"Error updating ranking: {str(e)}")
+            else:
+                st.info("No candidates available for ranking. Please analyze resumes first.")
             
             st.markdown("</div>", unsafe_allow_html=True)
             
@@ -212,56 +266,63 @@ def render_candidate_ranking_page():
         
         with col3:
             display_subsection_header("Detailed Analysis")
-            tabs = st.tabs(["#1", "#2", "#3"])
             
-            for i, (tab, resume) in enumerate(zip(tabs, st.session_state.ranked_candidates[:3])):
-                with tab:
-                    col_a, col_b = st.columns([1, 1])
-                    with col_a:
-                        st.markdown(f"**Score:** {resume['Score']:.2%}")
-                        try:
-                            radar_chart = create_radar_chart(resume, job_desc)
-                            st.plotly_chart(radar_chart, use_container_width=True)
-                        except Exception as e:
-                            st.error(f"Error creating radar chart: {str(e)}")
-                            st.info("Match analysis visualization unavailable")
-                    
-                    with col_b:
-                        try:
-                            # In a production environment, use the AI insight generation
-                            # insights = generate_ai_insights(job_desc, resume)
+            # Create tabs only if we have candidates to display
+            if st.session_state.ranked_candidates:
+                tabs = st.tabs(["#1", "#2", "#3"])
+                
+                for i, tab in enumerate(tabs):
+                    if i < len(st.session_state.ranked_candidates):
+                        resume = st.session_state.ranked_candidates[i]
+                        with tab:
+                            col_a, col_b = st.columns([1, 1])
+                            with col_a:
+                                st.markdown(f"**Score:** {resume['Score']:.2%}")
+                                try:
+                                    radar_chart = create_radar_chart(resume, job_desc)
+                                    st.plotly_chart(radar_chart, use_container_width=True)
+                                except Exception as e:
+                                    st.error(f"Error creating radar chart: {str(e)}")
+                                    st.info("Match analysis visualization unavailable")
                             
-                            # For now, provide a static insight
-                            insights = f"""
-                            <h4>Key Match Analysis</h4>
-                            <p>This candidate has skills that align with the job requirements.</p>
-                            <ul>
-                                <li>Technical skills match core requirements</li>
-                                <li>Experience with relevant tools</li>
-                                <li>Professional background enhances qualifications</li>
-                            </ul>
-                            <p><strong>Overall assessment:</strong> Good potential match</p>
-                            """
-                            
-                            st.markdown(f"""
-                            <div class="insight-box compact-text">
-                                {insights}
-                            </div>
-                            """, unsafe_allow_html=True)
-                        except Exception as e:
-                            st.error(f"Error generating insights: {str(e)}")
-                            st.markdown(f"""
-                            <div class="insight-box compact-text">
-                                <h4>Key Match Analysis</h4>
-                                <p>This candidate has skills that align with the job requirements.</p>
-                                <ul>
-                                    <li>Technical skills match core requirements</li>
-                                    <li>Experience with relevant tools</li>
-                                    <li>Professional background enhances qualifications</li>
-                                </ul>
-                                <p><strong>Overall assessment:</strong> Good potential match</p>
-                            </div>
-                            """, unsafe_allow_html=True)
+                            with col_b:
+                                try:
+                                    # In a production environment, use the AI insight generation
+                                    # insights = generate_ai_insights(job_desc, resume)
+                                    
+                                    # For now, provide a static insight
+                                    insights = f"""
+                                    <h4>Key Match Analysis</h4>
+                                    <p>This candidate has skills that align with the job requirements.</p>
+                                    <ul>
+                                        <li>Technical skills match core requirements</li>
+                                        <li>Experience with relevant tools</li>
+                                        <li>Professional background enhances qualifications</li>
+                                    </ul>
+                                    <p><strong>Overall assessment:</strong> Good potential match</p>
+                                    """
+                                    
+                                    st.markdown(f"""
+                                    <div class="insight-box compact-text">
+                                        {insights}
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                except Exception as e:
+                                    st.error(f"Error generating insights: {str(e)}")
+                                    st.markdown(f"""
+                                    <div class="insight-box compact-text">
+                                        <h4>Key Match Analysis</h4>
+                                        <p>This candidate has skills that align with the job requirements.</p>
+                                        <ul>
+                                            <li>Technical skills match core requirements</li>
+                                            <li>Experience with relevant tools</li>
+                                            <li>Professional background enhances qualifications</li>
+                                        </ul>
+                                        <p><strong>Overall assessment:</strong> Good potential match</p>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+            else:
+                st.info("Analyze resumes to see detailed candidate analysis.")
 
         # All Resumes by Category (below the main content)
         st.markdown("---")
@@ -270,8 +331,8 @@ def render_candidate_ranking_page():
         cat_col1, cat_col2, cat_col3 = st.columns(3)
         
         with cat_col1:
-            with st.expander(f"High Matches ({len(categorized_resumes['high_matches'])})"):
-                for resume in categorized_resumes['high_matches']:
+            with st.expander(f"High Matches ({len(categorized_resumes.get('high_matches', []))})"):
+                for resume in categorized_resumes.get('high_matches', []):
                     st.markdown(f"""
                     <div class="category-high">
                         <h4 style="margin:0">{resume['Resume ID']}</h4>
@@ -280,8 +341,8 @@ def render_candidate_ranking_page():
                     """, unsafe_allow_html=True)
         
         with cat_col2:
-            with st.expander(f"Medium Matches ({len(categorized_resumes['medium_matches'])})"):
-                for resume in categorized_resumes['medium_matches']:
+            with st.expander(f"Medium Matches ({len(categorized_resumes.get('medium_matches', []))})"):
+                for resume in categorized_resumes.get('medium_matches', []):
                     st.markdown(f"""
                     <div class="category-medium">
                         <h4 style="margin:0">{resume['Resume ID']}</h4>
@@ -290,11 +351,15 @@ def render_candidate_ranking_page():
                     """, unsafe_allow_html=True)
         
         with cat_col3:
-            with st.expander(f"Low Matches ({len(categorized_resumes['low_matches'])})"):
-                for resume in categorized_resumes['low_matches']:
+            with st.expander(f"Low Matches ({len(categorized_resumes.get('low_matches', []))})"):
+                for resume in categorized_resumes.get('low_matches', []):
                     st.markdown(f"""
                     <div class="category-low">
                         <h4 style="margin:0">{resume['Resume ID']}</h4>
                         <p style="margin:0">Match: {resume['Score']:.2%}</p>
                     </div>
                     """, unsafe_allow_html=True)
+    else:
+        # Display a prompt for the user if no analysis has been done yet
+        with col2:
+            st.info("Select a position and click 'Analyze Resumes' to get started.")

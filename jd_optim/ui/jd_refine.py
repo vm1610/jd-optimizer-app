@@ -3,7 +3,7 @@ import json
 import streamlit as st
 import datetime
 from docx import Document
-from utils.file_utils import read_job_description, read_feedback_file, get_feedback_files, save_enhanced_jd
+from utils.file_utils import read_job_description, save_enhanced_jd
 from utils.visualization import create_multi_radar_chart, create_comparison_dataframe
 from ui.common import (
     display_section_header, display_subsection_header,
@@ -275,7 +275,7 @@ def render_jd_refine_page(logger, analyzer, agent):
         feedback_types = ["General Feedback", "Rejected Candidate", "Hiring Manager Feedback", 
                          "Client Feedback", "Selected Candidate", "Interview Feedback"]
         
-        # Select feedback type (kept here in the feedback section)
+        # Select feedback type
         selected_feedback_type = st.selectbox(
             "Feedback Type:",
             options=feedback_types,
@@ -300,190 +300,45 @@ def render_jd_refine_page(logger, analyzer, agent):
             help="Be specific about what you'd like to change or improve"
         )
         
-        # Add divider before feedback file option
-        st.markdown("--- OR ---")
-        
-        # Option to select feedback from file
-        st.write("Select feedback from a file:")
-        
-        # Create tabs for selecting from directory or uploading
-        feedback_tabs = st.tabs(["Select from Feedbacks Folder", "Upload Feedback File"])
-        
-        feedback_from_file = None
-        file_feedback_type = selected_feedback_type
-        
-        with feedback_tabs[0]:
-            # Select from Feedbacks folder
-            feedback_directory = os.path.join(os.getcwd(), "Feedbacks")
-            
-            # Check if directory exists
-            if not os.path.exists(feedback_directory):
-                display_warning_message("The 'Feedbacks' directory does not exist. Please create it or upload a file directly.")
-            else:
-                # Get all .txt and .docx files from the Feedbacks folder
-                feedback_files = get_feedback_files()
+        # Create a button to add manual feedback
+        if st.button("Add Manual Feedback", type="secondary", key="add_feedback_only"):
+            if user_feedback.strip():
+                # Create feedback object with type
+                feedback_obj = {
+                    "feedback": user_feedback,
+                    "type": selected_feedback_type,
+                    "role": st.session_state.role
+                }
                 
-                if not feedback_files:
-                    display_warning_message("No feedback files found in the Feedbacks directory. Please add .txt or .docx files.")
-                else:
-                    # Allow user to select a feedback file
-                    selected_feedback_file = st.selectbox(
-                        "Select Feedback File",
-                        feedback_files,
-                        help="Choose a feedback file to process"
-                    )
-                    
-                    # Select feedback type for file
-                    file_feedback_type = st.selectbox(
-                        "File Feedback Type:",
-                        options=feedback_types,
-                        index=feedback_types.index(selected_feedback_type),
-                        key="file_feedback_type"
-                    )
-                    
-                    if selected_feedback_file:
-                        feedback_path = os.path.join(feedback_directory, selected_feedback_file)
-                        
-                        # Extract text based on file type
-                        try:
-                            feedback_from_file = read_feedback_file(feedback_path)
-                            
-                            # Display the feedback content
-                            st.text_area(
-                                "Feedback Content",
-                                feedback_from_file,
-                                height=100,
-                                disabled=True
-                            )
-                        except Exception as e:
-                            st.error(f"Error reading feedback file: {str(e)}")
+                # Add to the logger's feedback history directly
+                logger.current_state["feedback_history"].append(feedback_obj)
+                
+                # Save the updated state
+                logger._save_state()
+                
+                # Add to session state for UI update
+                if 'feedback_history' not in st.session_state:
+                    st.session_state.feedback_history = []
+                st.session_state.feedback_history.append(feedback_obj)
+                
+                # Log the action
+                logger.current_state["actions"].append({
+                    "action": "feedback",
+                    "timestamp": datetime.datetime.now().isoformat(),
+                    "index": len(logger.current_state["feedback_history"]) - 1
+                })
+                logger._save_state()
+                
+                # Clear feedback input
+                st.session_state.clear_feedback = True
+                display_success_message("Feedback added successfully! You can add more feedback or generate the final version when ready.")
+                st.rerun()
+            else:
+                display_warning_message("Please enter some feedback first.")
         
-        with feedback_tabs[1]:
-            # Upload file option
-            uploaded_feedback = st.file_uploader(
-                "Upload Feedback File",
-                type=['txt', 'docx'],
-                help="Upload a .txt or .docx file containing feedback"
-            )
-            
-            # Select feedback type for uploaded file
-            upload_feedback_type = st.selectbox(
-                "Uploaded File Feedback Type:",
-                options=feedback_types,
-                index=feedback_types.index(selected_feedback_type),
-                key="upload_feedback_type"
-            )
-            
-            if uploaded_feedback:
-                try:
-                    # Extract text based on file type
-                    if uploaded_feedback.name.endswith('.txt'):
-                        feedback_from_file = uploaded_feedback.getvalue().decode('utf-8')
-                    else:  # .docx
-                        # Save to temporary file to use python-docx
-                        temp_path = f"temp_{uploaded_feedback.name}"
-                        with open(temp_path, 'wb') as f:
-                            f.write(uploaded_feedback.getvalue())
-                        
-                        doc = Document(temp_path)
-                        feedback_from_file = '\n'.join([paragraph.text for paragraph in doc.paragraphs])
-                        
-                        # Clean up temp file
-                        if os.path.exists(temp_path):
-                            os.remove(temp_path)
-                    
-                    # Use the feedback type from the upload section
-                    file_feedback_type = upload_feedback_type
-                    
-                    # Display the feedback content
-                    st.text_area(
-                        "Feedback Content",
-                        feedback_from_file,
-                        height=100,
-                        disabled=True
-                    )
-                except Exception as e:
-                    st.error(f"Error processing uploaded file: {str(e)}")
-        
-        # Create a row for feedback action buttons
-        feedback_btn_col1, feedback_btn_col2, feedback_btn_col3 = st.columns(3)
-        
-        with feedback_btn_col1:
-            # Add a button to save manual feedback without generating final version
-            if st.button("Add Manual Feedback", type="secondary", key="add_feedback_only"):
-                if user_feedback.strip():
-                    # Create feedback object with type
-                    feedback_obj = {
-                        "feedback": user_feedback,
-                        "type": selected_feedback_type,
-                        "role": st.session_state.role
-                    }
-                    
-                    # Add to the logger's feedback history directly
-                    logger.current_state["feedback_history"].append(feedback_obj)
-                    
-                    # Save the updated state
-                    logger._save_state()
-                    
-                    # Add to session state for UI update
-                    if 'feedback_history' not in st.session_state:
-                        st.session_state.feedback_history = []
-                    st.session_state.feedback_history.append(feedback_obj)
-                    
-                    # Log the action
-                    logger.current_state["actions"].append({
-                        "action": "feedback",
-                        "timestamp": datetime.datetime.now().isoformat(),
-                        "index": len(logger.current_state["feedback_history"]) - 1
-                    })
-                    logger._save_state()
-                    
-                    # Clear feedback input
-                    st.session_state.clear_feedback = True
-                    display_success_message("Feedback added successfully! You can add more feedback or generate the final version when ready.")
-                    st.rerun()
-                else:
-                    display_warning_message("Please enter some feedback first.")
-        
-        with feedback_btn_col2:
-            # Add a button to use feedback from file
-            if st.button("Add File Feedback", type="secondary", key="add_file_feedback"):
-                if feedback_from_file:
-                    # Create feedback object with type
-                    feedback_obj = {
-                        "feedback": feedback_from_file,
-                        "type": file_feedback_type,
-                        "role": st.session_state.role
-                    }
-                    
-                    # Add to the logger's feedback history directly
-                    logger.current_state["feedback_history"].append(feedback_obj)
-                    
-                    # Save the updated state
-                    logger._save_state()
-                    
-                    # Add to session state for UI update
-                    if 'feedback_history' not in st.session_state:
-                        st.session_state.feedback_history = []
-                    st.session_state.feedback_history.append(feedback_obj)
-                    
-                    # Log the action
-                    logger.current_state["actions"].append({
-                        "action": "feedback",
-                        "timestamp": datetime.datetime.now().isoformat(),
-                        "index": len(logger.current_state["feedback_history"]) - 1
-                    })
-                    logger._save_state()
-                    
-                    display_success_message("File feedback added successfully!")
-                    st.rerun()
-                else:
-                    display_warning_message("Please select or upload a feedback file first.")
-        
-        with feedback_btn_col3:
-            # View all feedback button
-            if st.button("View All Feedback", type="secondary", key="view_all_feedback"):
-                st.session_state['viewing_all_feedback'] = True
+        # View all feedback button
+        if st.button("View All Feedback", type="secondary", key="view_all_feedback"):
+            st.session_state['viewing_all_feedback'] = True
     
     # Display all feedback if requested
     if st.session_state.get('viewing_all_feedback', False):

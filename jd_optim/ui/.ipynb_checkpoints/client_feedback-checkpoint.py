@@ -19,9 +19,9 @@ def render_client_feedback_page(logger, analyzer, agent):
         display_subsection_header("Upload Job Description")
         jd_file = st.file_uploader(
             "📄 Drop or upload a Job Description",
-            type=["txt", "docx"],
+            type=["txt", "docx", "csv"],
             key="client_jd_upload",
-            help="Upload the job description you want to enhance"
+            help="Upload the job description you want to enhance (TXT, DOCX, or CSV)"
         )
         
         # Optional: Display JD preview if uploaded
@@ -29,6 +29,49 @@ def render_client_feedback_page(logger, analyzer, agent):
             try:
                 if jd_file.name.endswith(".txt"):
                     job_description = jd_file.getvalue().decode("utf-8")
+                elif jd_file.name.endswith(".csv"):
+                    # Handle CSV file as a special case
+                    try:
+                        import pandas as pd
+                        # Read the CSV file
+                        csv_content = jd_file.getvalue().decode("utf-8")
+                        
+                        # Let user know we're processing a CSV
+                        st.info("Processing CSV file. Attempting to extract job description content...")
+                        
+                        # Try to intelligently extract a job description from CSV
+                        # This is a simplified approach - in a real app you'd want more robust handling
+                        df = pd.read_csv(pd.StringIO(csv_content))
+                        
+                        # Look for columns that might contain job description content
+                        potential_columns = ['job_description', 'description', 'jd', 'content', 'text']
+                        
+                        # Find the first matching column or use the first text column
+                        jd_column = None
+                        for col in potential_columns:
+                            if col in df.columns:
+                                jd_column = col
+                                break
+                        
+                        if jd_column is None:
+                            # If no matching column found, use the first column that seems to have text content
+                            for col in df.columns:
+                                if df[col].dtype == 'object' and df[col].str.len().mean() > 50:
+                                    jd_column = col
+                                    break
+                        
+                        if jd_column:
+                            # Use the first non-empty value in the column
+                            job_description = df[jd_column].dropna().iloc[0]
+                            st.success(f"Extracted job description from column: {jd_column}")
+                        else:
+                            # Fallback - concatenate all text columns
+                            text_cols = [col for col in df.columns if df[col].dtype == 'object']
+                            job_description = "\n\n".join([f"{col}:\n{df[col].iloc[0]}" for col in text_cols[:5]])
+                            st.warning("Could not identify a specific job description column. Using combined text from CSV.")
+                    except Exception as e:
+                        st.error(f"Error processing CSV file: {str(e)}")
+                        job_description = csv_content  # Use raw CSV content as fallback
                 else:  # .docx
                     # Save to temporary file to use python-docx
                     temp_path = f"temp_{jd_file.name}"
@@ -53,34 +96,256 @@ def render_client_feedback_page(logger, analyzer, agent):
     
     with feedback_col:
         display_subsection_header("Upload Client Feedback")
-        feedback_file = st.file_uploader(
-            "📝 Drop or upload Client Feedback",
-            type=["txt", "docx"],
-            key="client_feedback_upload",
-            help="Upload the feedback received from your client"
-        )
         
-        # Feedback type selection
-        feedback_types = [
-            "Client Feedback", 
-            "Rejected Candidate Feedback", 
-            "Hiring Manager Feedback", 
-            "Selected Candidate Feedback", 
-            "Interview Feedback"
-        ]
+        # Create tabs for selecting from directory or uploading
+        feedback_tabs = st.tabs(["Upload Feedback File", "Select from Feedbacks Folder"])
         
-        selected_feedback_type = st.selectbox(
-            "Feedback Type:",
-            options=feedback_types,
-            index=0,
-            key="client_feedback_type"
-        )
+        feedback_from_file = None
         
-        # Optional: Display feedback preview if uploaded
-        if feedback_file:
-            try:
-                if feedback_file.name.endswith(".txt"):
-                    client_feedback = feedback_file.getvalue().decode("utf-8")
+        with feedback_tabs[0]:
+            # Upload file option
+            feedback_file = st.file_uploader(
+                "📝 Drop or upload Client Feedback",
+                type=["txt", "docx", "csv"],
+                key="client_feedback_upload",
+                help="Upload the feedback received from your client (TXT, DOCX, or CSV)"
+            )
+            
+            # Feedback type selection
+            feedback_types = [
+                "Client Feedback", 
+                "Rejected Candidate Feedback", 
+                "Hiring Manager Feedback", 
+                "Selected Candidate Feedback", 
+                "Interview Feedback"
+            ]
+            
+            selected_feedback_type = st.selectbox(
+                "Feedback Type:",
+                options=feedback_types,
+                index=0,
+                key="client_feedback_type"
+            )
+            
+            # Optional: Display feedback preview if uploaded
+            if feedback_file:
+                try:
+                    if feedback_file.name.endswith(".txt"):
+                        client_feedback = feedback_file.getvalue().decode("utf-8")
+                    elif feedback_file.name.endswith(".csv"):
+                        # Handle CSV file as a special case
+                        try:
+                            import pandas as pd
+                            # Read the CSV file
+                            csv_content = feedback_file.getvalue().decode("utf-8")
+                            
+                            # Let user know we're processing a CSV
+                            st.info("Processing CSV file. Attempting to extract feedback content...")
+                            
+                            # Try to intelligently extract feedback from CSV
+                            df = pd.read_csv(pd.StringIO(csv_content))
+                            
+                            # Look for columns that might contain feedback content
+                            potential_columns = ['feedback', 'comments', 'notes', 'review', 'suggestions', 'input']
+                            
+                            # Find the first matching column or use the first text column
+                            feedback_column = None
+                            for col in potential_columns:
+                                if col in df.columns:
+                                    feedback_column = col
+                                    break
+                            
+                            if feedback_column is None:
+                                # If no matching column found, use the first column that seems to have text content
+                                for col in df.columns:
+                                    if df[col].dtype == 'object' and df[col].str.len().mean() > 20:
+                                        feedback_column = col
+                                        break
+                            
+                            if feedback_column:
+                                # Combine all feedback entries
+                                combined_feedback = "\n\n".join(df[feedback_column].dropna().tolist())
+                                client_feedback = combined_feedback
+                                st.success(f"Extracted {len(df[feedback_column].dropna())} feedback entries from column: {feedback_column}")
+                            else:
+                                # Fallback - concatenate all text columns
+                                text_cols = [col for col in df.columns if df[col].dtype == 'object']
+                                client_feedback = "\n\n".join([f"{col}:\n{df[col].iloc[0]}" for col in text_cols[:5]])
+                                st.warning("Could not identify a specific feedback column. Using combined text from CSV.")
+                        except Exception as e:
+                            st.error(f"Error processing CSV file: {str(e)}")
+                            client_feedback = csv_content  # Use raw CSV content as fallback
+                    else:  # .docx
+                        # Save to temporary file to use python-docx
+                        temp_path = f"temp_{feedback_file.name}"
+                        with open(temp_path, 'wb') as f:
+                            f.write(feedback_file.getvalue())
+                        
+                        doc = Document(temp_path)
+                        client_feedback = '\n'.join([paragraph.text for paragraph in doc.paragraphs])
+                        
+                        # Clean up temp file
+                        if os.path.exists(temp_path):
+                            os.remove(temp_path)
+                    
+                    # Store in session state for later use
+                    st.session_state.client_feedback = client_feedback
+                    st.session_state.client_feedback_type = selected_feedback_type
+                    
+                    # Preview
+                    with st.expander("Preview Client Feedback", expanded=False):
+                        st.text_area("Feedback Content", client_feedback, height=200, disabled=True)
+                except Exception as e:
+                    st.error(f"Error reading feedback file: {str(e)}")
+        
+        with feedback_tabs[1]:
+            # Select from Feedbacks folder
+            feedback_directory = os.path.join(os.getcwd(), "Feedbacks")
+            
+            # Check if directory exists
+            if not os.path.exists(feedback_directory):
+                display_warning_message("The 'Feedbacks' directory does not exist. Please create it or upload a file directly.")
+            else:
+                # Get all .txt, .docx, and .csv files from the Feedbacks folder
+                feedback_files = [f for f in os.listdir(feedback_directory) 
+                                 if f.endswith(('.txt', '.docx', '.csv'))]
+                
+                if not feedback_files:
+                    display_warning_message("No feedback files found in the Feedbacks directory.")
+                else:
+                    # Allow user to select a feedback file
+                    selected_feedback_file = st.selectbox(
+                        "Select Feedback File",
+                        feedback_files,
+                        help="Choose a feedback file to process"
+                    )
+                    
+                    # Select feedback type for file
+                    file_feedback_type = st.selectbox(
+                        "File Feedback Type:",
+                        options=feedback_types,
+                        index=0,
+                        key="file_feedback_type"
+                    )
+                    
+                    if selected_feedback_file:
+                        feedback_path = os.path.join(feedback_directory, selected_feedback_file)
+                        
+                        # Extract text based on file type
+                        try:
+                            if selected_feedback_file.endswith('.txt'):
+                                with open(feedback_path, 'r', encoding='utf-8') as file:
+                                    feedback_from_file = file.read()
+                            elif selected_feedback_file.endswith('.csv'):
+                                # Handle CSV similarly to the uploaded file section
+                                import pandas as pd
+                                df = pd.read_csv(feedback_path)
+                                
+                                # Look for columns that might contain feedback content
+                                potential_columns = ['feedback', 'comments', 'notes', 'review', 'suggestions', 'input']
+                                
+                                # Find the first matching column or use the first text column
+                                feedback_column = None
+                                for col in potential_columns:
+                                    if col in df.columns:
+                                        feedback_column = col
+                                        break
+                                
+                                if feedback_column is None:
+                                    # If no matching column found, use the first column that seems to have text content
+                                    for col in df.columns:
+                                        if df[col].dtype == 'object' and df[col].str.len().mean() > 20:
+                                            feedback_column = col
+                                            break
+                                
+                                if feedback_column:
+                                    # Combine all feedback entries
+                                    feedback_from_file = "\n\n".join(df[feedback_column].dropna().tolist())
+                                    st.success(f"Extracted {len(df[feedback_column].dropna())} feedback entries from column: {feedback_column}")
+                                else:
+                                    # Fallback - concatenate all text columns
+                                    text_cols = [col for col in df.columns if df[col].dtype == 'object']
+                                    feedback_from_file = "\n\n".join([f"{col}:\n{df[col].iloc[0]}" for col in text_cols[:5]])
+                                    st.warning("Could not identify a specific feedback column. Using combined text from CSV.")
+                            else:  # .docx
+                                doc = Document(feedback_path)
+                                feedback_from_file = '\n'.join([paragraph.text for paragraph in doc.paragraphs])
+                            
+                            # Store in session state
+                            st.session_state.client_feedback = feedback_from_file
+                            st.session_state.client_feedback_type = file_feedback_type
+                            
+                            # Display the feedback content
+                            st.text_area(
+                                "Feedback Content",
+                                feedback_from_file,
+                                height=200,
+                                disabled=True
+                            )
+                        except Exception as e:
+                            st.error(f"Error reading feedback file: {str(e)}")
+        
+        # Allow manual feedback input as an alternative to file upload
+        with st.expander("Or Enter Feedback Manually", expanded=False):
+            manual_feedback = st.text_area(
+                "Enter client feedback:",
+                height=150,
+                placeholder="Enter the feedback from your client here...",
+                key="manual_client_feedback"
+            )
+            
+            manual_feedback_type = st.selectbox(
+                "Feedback Type:",
+                options=feedback_types,
+                index=0,
+                key="manual_feedback_type"
+            )
+            
+            if st.button("Use This Feedback", key="use_manual_feedback"):
+                if manual_feedback.strip():
+                    st.session_state.client_feedback = manual_feedback
+                    st.session_state.client_feedback_type = manual_feedback_type
+                    st.success("Manual feedback saved!")
+                else:
+                    st.warning("Please enter some feedback first.")
+                        csv_content = feedback_file.getvalue().decode("utf-8")
+                        
+                        # Let user know we're processing a CSV
+                        st.info("Processing CSV file. Attempting to extract feedback content...")
+                        
+                        # Try to intelligently extract feedback from CSV
+                        df = pd.read_csv(pd.StringIO(csv_content))
+                        
+                        # Look for columns that might contain feedback content
+                        potential_columns = ['feedback', 'comments', 'notes', 'review', 'suggestions', 'input']
+                        
+                        # Find the first matching column or use the first text column
+                        feedback_column = None
+                        for col in potential_columns:
+                            if col in df.columns:
+                                feedback_column = col
+                                break
+                        
+                        if feedback_column is None:
+                            # If no matching column found, use the first column that seems to have text content
+                            for col in df.columns:
+                                if df[col].dtype == 'object' and df[col].str.len().mean() > 20:
+                                    feedback_column = col
+                                    break
+                        
+                        if feedback_column:
+                            # Combine all feedback entries
+                            combined_feedback = "\n\n".join(df[feedback_column].dropna().tolist())
+                            client_feedback = combined_feedback
+                            st.success(f"Extracted {len(df[feedback_column].dropna())} feedback entries from column: {feedback_column}")
+                        else:
+                            # Fallback - concatenate all text columns
+                            text_cols = [col for col in df.columns if df[col].dtype == 'object']
+                            client_feedback = "\n\n".join([f"{col}:\n{df[col].iloc[0]}" for col in text_cols[:5]])
+                            st.warning("Could not identify a specific feedback column. Using combined text from CSV.")
+                    except Exception as e:
+                        st.error(f"Error processing CSV file: {str(e)}")
+                        client_feedback = csv_content  # Use raw CSV content as fallback
                 else:  # .docx
                     # Save to temporary file to use python-docx
                     temp_path = f"temp_{feedback_file.name}"
