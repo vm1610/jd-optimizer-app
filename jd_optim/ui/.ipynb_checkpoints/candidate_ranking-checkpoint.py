@@ -28,41 +28,27 @@ def render_candidate_ranking_page():
         job_df = pd.DataFrame(job_data)
     else:
         try:
-            # Create job data from JD files
-            job_data = {
-                'File Name': [],
-                'Skills': [],
-                'Tools': [],
-                'JD_Type': []
-            }
-            
+            # Display all JD files directly without transformation
             jd_directory = os.path.join(os.getcwd(), "JDs")
             
-            for jd_file in jd_files:
-                file_path = os.path.join(jd_directory, jd_file)
-                content = read_job_description(file_path)
-                
-                # Extract skills and tools from content (simplified extraction)
-                skills = []
-                tools = []
-                
-                # Simple extraction logic based on headings
-                if "Skills" in content or "Requirements" in content:
-                    skills = ["Python", "Java", "Data Analysis"] if "Data" in content else ["Java", "Object-Oriented Programming"]
-                
-                if "Tools" in content or "Technologies" in content:
-                    tools = ["SQL", "Cloud", "Docker"] if "Data" in content else ["Debugging tools", "CoderPad"]
-                
-                # Append to job data
-                job_data['File Name'].append(jd_file)
-                job_data['Skills'].append(", ".join(skills))
-                job_data['Tools'].append(", ".join(tools))
-                job_data['JD_Type'].append(detect_jd_type(jd_file))
+            # Create job data from all JD files
+            job_data = {
+                'File Name': jd_files,
+                'Skills': [''] * len(jd_files),  # Empty skills initially
+                'Tools': [''] * len(jd_files),   # Empty tools initially
+                'JD_Type': [detect_jd_type(file) for file in jd_files]
+            }
             
+            # Create dataframe
             job_df = pd.DataFrame(job_data)
             
-            # Display info message about loaded files
+            # Show message about JD files found
             st.info(f"Loaded {len(job_df)} job descriptions from JDs folder")
+            
+            # Display list of JD files found (for debugging)
+            with st.expander("Found JD Files", expanded=False):
+                for jd_file in jd_files:
+                    st.write(f"- {jd_file}")
             
         except Exception as e:
             st.error(f"Error loading job data from JDs folder: {e}")
@@ -91,9 +77,16 @@ def render_candidate_ranking_page():
         jd_type = job_desc['JD_Type']
         st.markdown(f"**Resume Pool:** {jd_type.replace('_', ' ').title()}")
         
-        with st.expander("Job Details", expanded=False):
-            st.markdown(f"**Skills:** {job_desc['Skills']}")
-            st.markdown(f"**Tools:** {job_desc['Tools']}")
+        # Try to read the selected JD file to show its content
+        try:
+            jd_directory = os.path.join(os.getcwd(), "JDs")
+            file_path = os.path.join(jd_directory, selected_job_desc)
+            jd_content = read_job_description(file_path)
+            
+            with st.expander("Job Description Content", expanded=False):
+                st.text_area("Content", jd_content, height=200)
+        except Exception as e:
+            st.error(f"Error reading job description file: {e}")
         
         # Let user select resume data file (this will show the dropdown)
         resume_df = resume_analyzer.load_resume_data(jd_type)
@@ -111,6 +104,30 @@ def render_candidate_ranking_page():
             if st.button('🔍 Analyze Resumes', type="primary"):
                 with st.spinner('Analyzing resumes...'):
                     try:
+                        # For correct analysis, we need skills and tools
+                        # Extract skills and tools first if they're empty
+                        if not job_desc['Skills'] or not job_desc['Tools']:
+                            # Read the JD content
+                            jd_directory = os.path.join(os.getcwd(), "JDs")
+                            file_path = os.path.join(jd_directory, selected_job_desc)
+                            jd_content = read_job_description(file_path)
+                            
+                            # Extract some basic skills/tools based on file name
+                            if "java" in selected_job_desc.lower() or "python" in selected_job_desc.lower():
+                                skills = "Java, Python, Object-Oriented Programming"
+                                tools = "Debugging tools, IDE, Git"
+                            elif "data" in selected_job_desc.lower() or "analytics" in selected_job_desc.lower():
+                                skills = "Python, SQL, Data Analysis, ML, AI"
+                                tools = "SQL, Cloud, Docker, Data Visualization"
+                            else:
+                                skills = "Programming, Problem Solving, Communication"
+                                tools = "Project Management, Version Control, Documentation"
+                            
+                            # Update the job_desc dictionary
+                            job_desc = job_desc.copy()
+                            job_desc['Skills'] = skills
+                            job_desc['Tools'] = tools
+                        
                         categorized_resumes = resume_analyzer.categorize_resumes(job_desc, resume_df)
                         st.session_state['analysis_results'] = categorized_resumes
                     except Exception as e:
