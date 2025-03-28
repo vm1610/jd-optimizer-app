@@ -13,7 +13,7 @@ def render_candidate_ranking_page():
     display_section_header("🎯 Resume Ranking")
     
     # Create sample data if needed
-    if not os.path.exists('job_descriptions_analysis_output.csv'):
+    if not os.path.exists('/Exctracted Resumes'):
         display_warning_message("job_descriptions_analysis_output.csv not found. Using sample data instead.")
         # Create sample job data
         job_data = {
