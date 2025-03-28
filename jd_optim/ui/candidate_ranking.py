@@ -8,13 +8,15 @@ from utils.visualization import create_distribution_chart, create_radar_chart
 from ui.common import display_section_header, display_subsection_header, display_info_message, display_warning_message
 
 def render_candidate_ranking_page():
-    """Render the candidate ranking page with drag and drop functionality"""
+    """Render the candidate ranking page"""
     
     display_section_header("🎯 Resume Ranking")
     
-    # Create sample data if needed
-    if not os.path.exists('job_descriptions_analysis_output.csv'):
-        display_warning_message("job_descriptions_analysis_output.csv not found. Using sample data instead.")
+    # Try to load job data from JDs folder
+    jd_files = get_jd_files()
+    
+    if not jd_files:
+        display_warning_message("No job description files found in JDs folder. Using sample data instead.")
         # Create sample job data
         job_data = {
             'File Name': ['DataAnalyticsAIMLJD (1).txt', 'JobDescriptionJavaPythonSupport.txt'],
@@ -25,14 +27,44 @@ def render_candidate_ranking_page():
         job_df = pd.DataFrame(job_data)
     else:
         try:
-            # Load job data
-            job_df = pd.read_csv('job_descriptions_analysis_output.csv')
+            # Create job data from JD files
+            job_data = {
+                'File Name': [],
+                'Skills': [],
+                'Tools': [],
+                'JD_Type': []
+            }
             
-            # Add JD_Type column if it doesn't exist
-            if 'JD_Type' not in job_df.columns:
-                job_df['JD_Type'] = job_df['File Name'].apply(detect_jd_type)
+            jd_directory = os.path.join(os.getcwd(), "JDs")
+            
+            for jd_file in jd_files:
+                file_path = os.path.join(jd_directory, jd_file)
+                content = read_job_description(file_path)
+                
+                # Extract skills and tools from content (simplified extraction)
+                skills = []
+                tools = []
+                
+                # Simple extraction logic based on headings
+                if "Skills" in content or "Requirements" in content:
+                    skills = ["Python", "Java", "Data Analysis"] if "Data" in content else ["Java", "Object-Oriented Programming"]
+                
+                if "Tools" in content or "Technologies" in content:
+                    tools = ["SQL", "Cloud", "Docker"] if "Data" in content else ["Debugging tools", "CoderPad"]
+                
+                # Append to job data
+                job_data['File Name'].append(jd_file)
+                job_data['Skills'].append(", ".join(skills))
+                job_data['Tools'].append(", ".join(tools))
+                job_data['JD_Type'].append(detect_jd_type(jd_file))
+            
+            job_df = pd.DataFrame(job_data)
+            
+            # Display info message about loaded files
+            st.info(f"Loaded {len(job_df)} job descriptions from JDs folder")
+            
         except Exception as e:
-            st.error(f"Error loading job data: {e}")
+            st.error(f"Error loading job data from JDs folder: {e}")
             # Create sample job data
             job_data = {
                 'File Name': ['DataAnalyticsAIMLJD (1).txt', 'JobDescriptionJavaPythonSupport.txt'],
@@ -40,7 +72,7 @@ def render_candidate_ranking_page():
                 'Tools': ['SQL, Cloud, Docker', 'Debugging tools, CoderPad'],
                 'JD_Type': ['data_engineer', 'java_developer']
             }
-            job_df = pd.DataFrame(job_data)
+            job_df = pd.DataFrame(job_data)a)
     
     # Create three columns for main layout
     col1, col2, col3 = st.columns([1, 1, 1])

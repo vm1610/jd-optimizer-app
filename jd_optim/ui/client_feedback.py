@@ -12,6 +12,14 @@ def render_client_feedback_page(logger, analyzer, agent):
     """Render the Client Feedback tab with JD + Feedback drop zones"""
     display_section_header("💬 Client Feedback Enhancement")
     
+    # Initialize session state variables if they don't exist
+    if 'client_jd' not in st.session_state:
+        st.session_state.client_jd = ""
+    if 'client_feedback' not in st.session_state:
+        st.session_state.client_feedback = ""
+    if 'client_feedback_type_value' not in st.session_state:
+        st.session_state.client_feedback_type_value = "Client Feedback"
+    
     # Create two columns for file upload
     jd_col, feedback_col = st.columns(2)
     
@@ -100,8 +108,17 @@ def render_client_feedback_page(logger, analyzer, agent):
         # Create tabs for selecting from directory or uploading
         feedback_tabs = st.tabs(["Upload Feedback File", "Select from Feedbacks Folder"])
         
-        feedback_from_file = None
+        # Define feedback types
+        feedback_types = [
+            "Client Feedback", 
+            "Rejected Candidate Feedback", 
+            "Hiring Manager Feedback", 
+            "Selected Candidate Feedback", 
+            "Interview Feedback"
+        ]
         
+        # Maintain a consistent session state key for feedback type
+        # Capture the selected feedback type in a variable rather than directly modifying session state
         with feedback_tabs[0]:
             # Upload file option
             feedback_file = st.file_uploader(
@@ -111,21 +128,17 @@ def render_client_feedback_page(logger, analyzer, agent):
                 help="Upload the feedback received from your client (TXT, DOCX, or CSV)"
             )
             
-            # Feedback type selection
-            feedback_types = [
-                "Client Feedback", 
-                "Rejected Candidate Feedback", 
-                "Hiring Manager Feedback", 
-                "Selected Candidate Feedback", 
-                "Interview Feedback"
-            ]
-            
+            # Feedback type selection - use a consistent variable name across tabs
             selected_feedback_type = st.selectbox(
                 "Feedback Type:",
                 options=feedback_types,
-                index=0,
+                index=feedback_types.index(st.session_state.client_feedback_type_value) 
+                    if st.session_state.client_feedback_type_value in feedback_types else 0,
                 key="client_feedback_type"
             )
+            
+            # Update the session state with the selected value
+            st.session_state.client_feedback_type_value = selected_feedback_type
             
             # Optional: Display feedback preview if uploaded
             if feedback_file:
@@ -190,7 +203,6 @@ def render_client_feedback_page(logger, analyzer, agent):
                     
                     # Store in session state for later use
                     st.session_state.client_feedback = client_feedback
-                    st.session_state.client_feedback_type = selected_feedback_type
                     
                     # Preview
                     with st.expander("Preview Client Feedback", expanded=False):
@@ -208,7 +220,7 @@ def render_client_feedback_page(logger, analyzer, agent):
             else:
                 # Get all .txt, .docx, and .csv files from the Feedbacks folder
                 feedback_files = [f for f in os.listdir(feedback_directory) 
-                                 if f.endswith(('.txt', '.docx', '.csv'))]
+                                if f.endswith(('.txt', '.docx', '.csv'))]
                 
                 if not feedback_files:
                     display_warning_message("No feedback files found in the Feedbacks directory.")
@@ -220,70 +232,79 @@ def render_client_feedback_page(logger, analyzer, agent):
                         help="Choose a feedback file to process"
                     )
                     
-                    # Select feedback type for file
+                    # Select feedback type for file - use a different key
                     file_feedback_type = st.selectbox(
                         "File Feedback Type:",
                         options=feedback_types,
-                        index=0,
+                        index=feedback_types.index(st.session_state.client_feedback_type_value)
+                            if st.session_state.client_feedback_type_value in feedback_types else 0,
                         key="file_feedback_type"
                     )
                     
-                    if selected_feedback_file:
-                        feedback_path = os.path.join(feedback_directory, selected_feedback_file)
-                        
-                        # Extract text based on file type
-                        try:
-                            if selected_feedback_file.endswith('.txt'):
-                                with open(feedback_path, 'r', encoding='utf-8') as file:
-                                    feedback_from_file = file.read()
-                            elif selected_feedback_file.endswith('.csv'):
-                                # Handle CSV similarly to the uploaded file section
-                                import pandas as pd
-                                df = pd.read_csv(feedback_path)
-                                
-                                # Look for columns that might contain feedback content
-                                potential_columns = ['feedback', 'comments', 'notes', 'review', 'suggestions', 'input']
-                                
-                                # Find the first matching column or use the first text column
-                                feedback_column = None
-                                for col in potential_columns:
-                                    if col in df.columns:
-                                        feedback_column = col
-                                        break
-                                
-                                if feedback_column is None:
-                                    # If no matching column found, use the first column that seems to have text content
-                                    for col in df.columns:
-                                        if df[col].dtype == 'object' and df[col].str.len().mean() > 20:
+                    # Update session state with selected type
+                    # Only do this if this tab is active
+                    if st.session_state.get("__streamlit_active_tab", 0) == 1:
+                        st.session_state.client_feedback_type_value = file_feedback_type
+                    
+                    # Add a button to load the selected file
+                    if st.button("Load Selected File", key="load_feedback_file"):
+                        if selected_feedback_file:
+                            feedback_path = os.path.join(feedback_directory, selected_feedback_file)
+                            
+                            # Extract text based on file type
+                            try:
+                                if selected_feedback_file.endswith('.txt'):
+                                    with open(feedback_path, 'r', encoding='utf-8') as file:
+                                        feedback_from_file = file.read()
+                                elif selected_feedback_file.endswith('.csv'):
+                                    # Handle CSV similarly to the uploaded file section
+                                    import pandas as pd
+                                    df = pd.read_csv(feedback_path)
+                                    
+                                    # Look for columns that might contain feedback content
+                                    potential_columns = ['feedback', 'comments', 'notes', 'review', 'suggestions', 'input']
+                                    
+                                    # Find the first matching column or use the first text column
+                                    feedback_column = None
+                                    for col in potential_columns:
+                                        if col in df.columns:
                                             feedback_column = col
                                             break
+                                    
+                                    if feedback_column is None:
+                                        # If no matching column found, use the first column that seems to have text content
+                                        for col in df.columns:
+                                            if df[col].dtype == 'object' and df[col].str.len().mean() > 20:
+                                                feedback_column = col
+                                                break
+                                    
+                                    if feedback_column:
+                                        # Combine all feedback entries
+                                        feedback_from_file = "\n\n".join(df[feedback_column].dropna().tolist())
+                                        st.success(f"Extracted {len(df[feedback_column].dropna())} feedback entries from column: {feedback_column}")
+                                    else:
+                                        # Fallback - concatenate all text columns
+                                        text_cols = [col for col in df.columns if df[col].dtype == 'object']
+                                        feedback_from_file = "\n\n".join([f"{col}:\n{df[col].iloc[0]}" for col in text_cols[:5]])
+                                        st.warning("Could not identify a specific feedback column. Using combined text from CSV.")
+                                else:  # .docx
+                                    doc = Document(feedback_path)
+                                    feedback_from_file = '\n'.join([paragraph.text for paragraph in doc.paragraphs])
                                 
-                                if feedback_column:
-                                    # Combine all feedback entries
-                                    feedback_from_file = "\n\n".join(df[feedback_column].dropna().tolist())
-                                    st.success(f"Extracted {len(df[feedback_column].dropna())} feedback entries from column: {feedback_column}")
-                                else:
-                                    # Fallback - concatenate all text columns
-                                    text_cols = [col for col in df.columns if df[col].dtype == 'object']
-                                    feedback_from_file = "\n\n".join([f"{col}:\n{df[col].iloc[0]}" for col in text_cols[:5]])
-                                    st.warning("Could not identify a specific feedback column. Using combined text from CSV.")
-                            else:  # .docx
-                                doc = Document(feedback_path)
-                                feedback_from_file = '\n'.join([paragraph.text for paragraph in doc.paragraphs])
-                            
-                            # Store in session state
-                            st.session_state.client_feedback = feedback_from_file
-                            st.session_state.client_feedback_type = file_feedback_type
-                            
-                            # Display the feedback content
-                            st.text_area(
-                                "Feedback Content",
-                                feedback_from_file,
-                                height=200,
-                                disabled=True
-                            )
-                        except Exception as e:
-                            st.error(f"Error reading feedback file: {str(e)}")
+                                # Store in session state
+                                st.session_state.client_feedback = feedback_from_file
+                                
+                                # Display the feedback content
+                                st.text_area(
+                                    "Feedback Content",
+                                    feedback_from_file,
+                                    height=200,
+                                    disabled=True
+                                )
+                                
+                                st.success(f"Successfully loaded feedback from {selected_feedback_file}")
+                            except Exception as e:
+                                st.error(f"Error reading feedback file: {str(e)}")
         
         # Allow manual feedback input as an alternative to file upload
         with st.expander("Or Enter Feedback Manually", expanded=False):
@@ -297,14 +318,15 @@ def render_client_feedback_page(logger, analyzer, agent):
             manual_feedback_type = st.selectbox(
                 "Feedback Type:",
                 options=feedback_types,
-                index=0,
+                index=feedback_types.index(st.session_state.client_feedback_type_value)
+                    if st.session_state.client_feedback_type_value in feedback_types else 0,
                 key="manual_feedback_type"
             )
             
             if st.button("Use This Feedback", key="use_manual_feedback"):
                 if manual_feedback.strip():
                     st.session_state.client_feedback = manual_feedback
-                    st.session_state.client_feedback_type = manual_feedback_type
+                    st.session_state.client_feedback_type_value = manual_feedback_type
                     st.success("Manual feedback saved!")
                 else:
                     st.warning("Please enter some feedback first.")
@@ -328,13 +350,13 @@ def render_client_feedback_page(logger, analyzer, agent):
     
     # Handle generation process
     if generate_btn:
-        if not hasattr(st.session_state, 'client_jd') or not hasattr(st.session_state, 'client_feedback'):
+        if not st.session_state.client_jd or not st.session_state.client_feedback:
             st.warning("Please upload both a job description and client feedback before generating.")
             return
         
         job_description = st.session_state.client_jd
         client_feedback = st.session_state.client_feedback
-        feedback_type = st.session_state.client_feedback_type
+        feedback_type = st.session_state.client_feedback_type_value
         
         with st.spinner("Enhancing job description with client feedback..."):
             try:
@@ -379,7 +401,7 @@ def render_client_feedback_page(logger, analyzer, agent):
                 st.error("Please try again or contact support if the problem persists.")
     
     # Display results if generation was successful
-    if hasattr(st.session_state, 'client_enhanced_jd'):
+    if 'client_enhanced_jd' in st.session_state and st.session_state.client_enhanced_jd:
         # Display results in an organized layout
         st.markdown("---")
         display_section_header("Results")
@@ -406,7 +428,7 @@ def render_client_feedback_page(logger, analyzer, agent):
             )
         
         # Compare original vs enhanced with skill analysis
-        if hasattr(st.session_state, 'client_jd') and hasattr(st.session_state, 'client_enhanced_jd'):
+        if st.session_state.client_jd and st.session_state.client_enhanced_jd:
             display_section_header("Comparison Analysis")
             
             # Analyze both versions
