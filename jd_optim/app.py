@@ -143,7 +143,7 @@ def main():
             render_jd_enhance_page(logger, analyzer, agent)
         else:  # "jd_refine"
             render_jd_refine_page(logger, analyzer, agent)
-    elif st.session_state.active_tab == "First Levele Feedback":
+    elif st.session_state.active_tab == "First Level Feedback":
         render_jd_refine_page(logger, analyzer, agent)  # Use the same function for feedback loop
     elif st.session_state.active_tab == "Candidate Ranking":
         render_candidate_ranking_page()
