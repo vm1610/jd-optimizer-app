@@ -134,4 +134,24 @@ def main():
             else:  # "jd_refine"
                 render_jd_refine_page(logger, analyzer, agent)
         elif st.session_state.active_tab == "Feedback Loop":
-            render_jd_refine_page
+            render_jd_refine_page(logger, analyzer, agent)  # Use the same function for feedback loop
+        elif st.session_state.active_tab == "Candidate Ranking":
+            render_candidate_ranking_page()
+        elif st.session_state.active_tab == "Interview Prep":
+            render_interview_prep_page()
+    except Exception as e:
+        st.error(f"An error occurred: {str(e)}")
+        st.error("Please report this issue to support.")
+    
+    # Footer with company info
+    st.markdown("---")
+    footer_col1, footer_col2 = st.columns([4, 1])
+    
+    with footer_col1:
+        st.caption("JD Agent | Made by Apexon")
+    
+    with footer_col2:
+        st.caption(f"v2.0 - {datetime.datetime.now().strftime('%Y')}")
+
+if __name__ == "__main__":
+    main()
