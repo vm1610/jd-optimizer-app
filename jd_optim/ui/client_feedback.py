@@ -1,5 +1,5 @@
-import streamlit as st
 import os
+import streamlit as st
 import datetime
 from docx import Document
 from ui.common import (
@@ -308,86 +308,10 @@ def render_client_feedback_page(logger, analyzer, agent):
                     st.success("Manual feedback saved!")
                 else:
                     st.warning("Please enter some feedback first.")
-                        csv_content = feedback_file.getvalue().decode("utf-8")
-                        
-                        # Let user know we're processing a CSV
-                        st.info("Processing CSV file. Attempting to extract feedback content...")
-                        
-                        # Try to intelligently extract feedback from CSV
-                        df = pd.read_csv(pd.StringIO(csv_content))
-                        
-                        # Look for columns that might contain feedback content
-                        potential_columns = ['feedback', 'comments', 'notes', 'review', 'suggestions', 'input']
-                        
-                        # Find the first matching column or use the first text column
-                        feedback_column = None
-                        for col in potential_columns:
-                            if col in df.columns:
-                                feedback_column = col
-                                break
-                        
-                        if feedback_column is None:
-                            # If no matching column found, use the first column that seems to have text content
-                            for col in df.columns:
-                                if df[col].dtype == 'object' and df[col].str.len().mean() > 20:
-                                    feedback_column = col
-                                    break
-                        
-                        if feedback_column:
-                            # Combine all feedback entries
-                            combined_feedback = "\n\n".join(df[feedback_column].dropna().tolist())
-                            client_feedback = combined_feedback
-                            st.success(f"Extracted {len(df[feedback_column].dropna())} feedback entries from column: {feedback_column}")
-                        else:
-                            # Fallback - concatenate all text columns
-                            text_cols = [col for col in df.columns if df[col].dtype == 'object']
-                            client_feedback = "\n\n".join([f"{col}:\n{df[col].iloc[0]}" for col in text_cols[:5]])
-                            st.warning("Could not identify a specific feedback column. Using combined text from CSV.")
-                    except Exception as e:
-                        st.error(f"Error processing CSV file: {str(e)}")
-                        client_feedback = csv_content  # Use raw CSV content as fallback
-                else:  # .docx
-                    # Save to temporary file to use python-docx
-                    temp_path = f"temp_{feedback_file.name}"
-                    with open(temp_path, 'wb') as f:
-                        f.write(feedback_file.getvalue())
-                    
-                    doc = Document(temp_path)
-                    client_feedback = '\n'.join([paragraph.text for paragraph in doc.paragraphs])
-                    
-                    # Clean up temp file
-                    if os.path.exists(temp_path):
-                        os.remove(temp_path)
-                
-                # Store in session state for later use
-                st.session_state.client_feedback = client_feedback
-                st.session_state.client_feedback_type = selected_feedback_type
-                
-                # Preview
-                with st.expander("Preview Client Feedback", expanded=False):
-                    st.text_area("Feedback Content", client_feedback, height=200, disabled=True)
-            except Exception as e:
-                st.error(f"Error reading feedback file: {str(e)}")
-
-    # Allow manual feedback input as an alternative to file upload
-    with st.expander("Or Enter Feedback Manually", expanded=False):
-        manual_feedback = st.text_area(
-            "Enter client feedback:",
-            height=150,
-            placeholder="Enter the feedback from your client here...",
-            key="manual_client_feedback"
-        )
-        
-        if st.button("Use This Feedback", key="use_manual_feedback"):
-            if manual_feedback.strip():
-                st.session_state.client_feedback = manual_feedback
-                st.session_state.client_feedback_type = selected_feedback_type
-                st.success("Manual feedback saved!")
-            else:
-                st.warning("Please enter some feedback first.")
 
     # Generate enhanced JD button
-    st.markdown(f"<div class='subsection-header'>Generate Enhanced Job Description</div>", unsafe_allow_html=True)
+    st.markdown("---")
+    display_subsection_header("Generate Enhanced Job Description")
     
     generate_col1, generate_col2 = st.columns([3, 1])
     
