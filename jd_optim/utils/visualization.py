@@ -50,7 +50,7 @@ def create_multi_radar_chart(scores_dict):
     
     for label, scores in scores_dict.items():
         fig.add_trace(go.Scatterpolar(
-            r=[scores[cat] for cat in categories],
+            r=[scores.get(cat, 0) for cat in categories],
             theta=categories,
             fill='toself',
             name=label
@@ -74,9 +74,9 @@ def create_distribution_chart(categorized_resumes):
     """Create a distribution chart showing resume categories"""
     categories = ['High Match', 'Medium Match', 'Low Match']
     counts = [
-        len(categorized_resumes['high_matches']),
-        len(categorized_resumes['medium_matches']),
-        len(categorized_resumes['low_matches'])
+        len(categorized_resumes.get('high_matches', [])),
+        len(categorized_resumes.get('medium_matches', [])),
+        len(categorized_resumes.get('low_matches', []))
     ]
     
     fig = go.Figure(data=[
@@ -100,6 +100,9 @@ def create_distribution_chart(categorized_resumes):
 
 def create_comparison_dataframe(scores_dict):
     """Create a DataFrame comparing multiple job descriptions"""
+    if not scores_dict:
+        return pd.DataFrame()
+        
     categories = list(next(iter(scores_dict.values())).keys())
     
     df_data = {
@@ -108,13 +111,13 @@ def create_comparison_dataframe(scores_dict):
     
     # Add scores for each version
     for label, scores in scores_dict.items():
-        df_data[label] = [f"{scores[cat]:.2%}" for cat in categories]
+        df_data[label] = [f"{scores.get(cat, 0):.2%}" for cat in categories]
         
         # Calculate change from original if this isn't the original
-        if label != 'Original':
+        if label != 'Original' and 'Original' in scores_dict:
             original_scores = scores_dict['Original']
             df_data[f'{label} Change'] = [
-                f"{(scores[cat] - original_scores[cat])*100:+.2f}%" 
+                f"{(scores.get(cat, 0) - original_scores.get(cat, 0))*100:+.2f}%" 
                 for cat in categories
             ]
     

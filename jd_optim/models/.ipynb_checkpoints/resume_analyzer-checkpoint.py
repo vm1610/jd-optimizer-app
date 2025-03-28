@@ -115,18 +115,23 @@ class ResumeAnalyzer:
             DataFrame: DataFrame containing resume data
         """
         try:
-            # Check if "Extracted Resumes" directory exists (with correct spelling)
-            extracted_dir = "Extracted Resumes"
-            if not os.path.exists(extracted_dir):
-                # Try alternative spellings
-                alternative_dirs = ["Exctracted Resumes", "ExtractedResumes", "Resumes"]
-                for alt_dir in alternative_dirs:
-                    if os.path.exists(alt_dir):
-                        extracted_dir = alt_dir
-                        break
+            # Check for resume directory with multiple possible spellings
+            directories_to_check = [
+                "Exctracted Resumes",  # Match your actual directory name first
+                "Extracted Resumes", 
+                "ExtractedResumes", 
+                "Resumes"
+            ]
             
-            # Get all CSV files in the directory
-            if os.path.exists(extracted_dir):
+            extracted_dir = None
+            for dir_name in directories_to_check:
+                if os.path.exists(dir_name):
+                    extracted_dir = dir_name
+                    break
+            
+            # Get all CSV files either from the directory or current directory
+            if extracted_dir:
+                st.info(f"Using resume directory: {extracted_dir}")
                 resume_files = [f for f in os.listdir(extracted_dir) if f.endswith('.csv')]
             else:
                 # Look for CSV files in current directory if no resume folder exists
@@ -144,7 +149,7 @@ class ResumeAnalyzer:
             )
             
             # Determine the full path to the selected file
-            if os.path.exists(extracted_dir) and os.path.exists(os.path.join(extracted_dir, selected_file)):
+            if extracted_dir and os.path.exists(os.path.join(extracted_dir, selected_file)):
                 file_path = os.path.join(extracted_dir, selected_file)
             else:
                 file_path = selected_file

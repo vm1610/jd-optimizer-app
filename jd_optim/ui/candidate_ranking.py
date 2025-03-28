@@ -13,7 +13,7 @@ def render_candidate_ranking_page():
     display_section_header("🎯 Resume Ranking")
     
     # Create sample data if needed
-    if not os.path.exists('/Exctracted Resumes'):
+    if not os.path.exists('job_descriptions_analysis_output.csv'):
         display_warning_message("job_descriptions_analysis_output.csv not found. Using sample data instead.")
         # Create sample job data
         job_data = {
@@ -118,9 +118,9 @@ def render_candidate_ranking_page():
         display_subsection_header("Top Matches")
         for i, resume in enumerate(categorized_resumes['top_3'][:3]):
             st.markdown(f"""
-            <div class="metric-card">
-                <h4 style="margin:0">#{i + 1} - {resume['Resume ID']}</h4>
-                <p style="margin:0">Match: {resume['Score']:.2%}</p>
+            <div>
+                <h4>#{i + 1} - {resume['Resume ID']}</h4>
+                <p>Match: {resume['Score']:.2%}</p>
             </div>
             """, unsafe_allow_html=True)
     
@@ -142,9 +142,6 @@ def render_candidate_ranking_page():
                 
                 with col_b:
                     try:
-                        # In a production environment, use the AI insight generation
-                        # insights = generate_ai_insights(job_desc, resume)
-                        
                         # For now, provide a static insight
                         insights = f"""
                         <h4>Key Match Analysis</h4>
@@ -157,24 +154,18 @@ def render_candidate_ranking_page():
                         <p><strong>Overall assessment:</strong> Good potential match</p>
                         """
                         
-                        st.markdown(f"""
-                        <div class="insight-box compact-text">
-                            {insights}
-                        </div>
-                        """, unsafe_allow_html=True)
+                        st.markdown(insights, unsafe_allow_html=True)
                     except Exception as e:
                         st.error(f"Error generating insights: {str(e)}")
-                        st.markdown(f"""
-                        <div class="insight-box compact-text">
-                            <h4>Key Match Analysis</h4>
-                            <p>This candidate has skills that align with the job requirements.</p>
-                            <ul>
-                                <li>Technical skills match core requirements</li>
-                                <li>Experience with relevant tools</li>
-                                <li>Professional background enhances qualifications</li>
-                            </ul>
-                            <p><strong>Overall assessment:</strong> Good potential match</p>
-                        </div>
+                        st.markdown("""
+                        <h4>Key Match Analysis</h4>
+                        <p>This candidate has skills that align with the job requirements.</p>
+                        <ul>
+                            <li>Technical skills match core requirements</li>
+                            <li>Experience with relevant tools</li>
+                            <li>Professional background enhances qualifications</li>
+                        </ul>
+                        <p><strong>Overall assessment:</strong> Good potential match</p>
                         """, unsafe_allow_html=True)
 
     # All Resumes by Category (below the main content)
@@ -187,9 +178,9 @@ def render_candidate_ranking_page():
         with st.expander(f"High Matches ({len(categorized_resumes['high_matches'])})"):
             for resume in categorized_resumes['high_matches']:
                 st.markdown(f"""
-                <div class="category-high">
-                    <h4 style="margin:0">{resume['Resume ID']}</h4>
-                    <p style="margin:0">Match: {resume['Score']:.2%}</p>
+                <div>
+                    <h4>{resume['Resume ID']}</h4>
+                    <p>Match: {resume['Score']:.2%}</p>
                 </div>
                 """, unsafe_allow_html=True)
     
@@ -197,9 +188,9 @@ def render_candidate_ranking_page():
         with st.expander(f"Medium Matches ({len(categorized_resumes['medium_matches'])})"):
             for resume in categorized_resumes['medium_matches']:
                 st.markdown(f"""
-                <div class="category-medium">
-                    <h4 style="margin:0">{resume['Resume ID']}</h4>
-                    <p style="margin:0">Match: {resume['Score']:.2%}</p>
+                <div>
+                    <h4>{resume['Resume ID']}</h4>
+                    <p>Match: {resume['Score']:.2%}</p>
                 </div>
                 """, unsafe_allow_html=True)
     
@@ -207,8 +198,8 @@ def render_candidate_ranking_page():
         with st.expander(f"Low Matches ({len(categorized_resumes['low_matches'])})"):
             for resume in categorized_resumes['low_matches']:
                 st.markdown(f"""
-                <div class="category-low">
-                    <h4 style="margin:0">{resume['Resume ID']}</h4>
-                    <p style="margin:0">Match: {resume['Score']:.2%}</p>
+                <div>
+                    <h4>{resume['Resume ID']}</h4>
+                    <p>Match: {resume['Score']:.2%}</p>
                 </div>
                 """, unsafe_allow_html=True)
