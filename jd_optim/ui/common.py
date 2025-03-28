@@ -57,7 +57,7 @@ def render_role_selector():
 
 def render_tabs():
     """Render the navigation tabs"""
-    tabs = ["JD Versions", "Manual Feedback", "Candidate Ranking", "Client Feedback", "Interview Prep"]
+    tabs = ["JD Versions", "First Level Feedback", "Candidate Ranking", "Client Feedback", "Interview Prep"]
     
     # Create tab buttons
     cols = st.columns(len(tabs))
