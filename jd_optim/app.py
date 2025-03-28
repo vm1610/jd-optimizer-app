@@ -16,6 +16,7 @@ from ui.jd_enhance import render_jd_enhance_page
 from ui.jd_refine import render_jd_refine_page
 from ui.candidate_ranking import render_candidate_ranking_page
 from ui.interview_prep import render_interview_prep_page
+from ui.client_feedback import render_client_feedback_page
 
 def init_session_state():
     """Initialize session state variables if they don't exist"""
@@ -59,13 +60,23 @@ def init_session_state():
         st.session_state.active_tab = "JD Versions"
         
     if 'analysis_results' not in st.session_state:
-        # Initialize with empty structure to avoid reference errors
-        st.session_state.analysis_results = {
-            'top_3': [],
-            'high_matches': [],
-            'medium_matches': [],
-            'low_matches': []
-        }
+        st.session_state.analysis_results = None
+        
+    if 'ranked_candidates' not in st.session_state:
+        st.session_state.ranked_candidates = []
+        
+    # Client feedback tab specific state
+    if 'client_jd' not in st.session_state:
+        st.session_state.client_jd = None
+        
+    if 'client_feedback' not in st.session_state:
+        st.session_state.client_feedback = None
+        
+    if 'client_feedback_type' not in st.session_state:
+        st.session_state.client_feedback_type = "Client Feedback"
+        
+    if 'client_enhanced_jd' not in st.session_state:
+        st.session_state.client_enhanced_jd = None
 
 def get_or_create_logger():
     """Get existing logger from session state or create a new one"""
@@ -115,7 +126,7 @@ def main():
     # Render header with logo and title
     render_header()
     
-    # Render role selector (without feedback type)
+    # Render role selector
     render_role_selector()
     
     # Render navigation tabs
@@ -126,22 +137,20 @@ def main():
     agent = JobDescriptionAgent(model_id="anthropic.claude-3-haiku-20240307-v1:0")
     
     # Render the appropriate content based on active tab
-    try:
-        if st.session_state.active_tab == "JD Versions":
-            # For JD Versions tab, render either the enhance or refine page based on current state
-            if st.session_state.current_page == "jd_enhance":
-                render_jd_enhance_page(logger, analyzer, agent)
-            else:  # "jd_refine"
-                render_jd_refine_page(logger, analyzer, agent)
-        elif st.session_state.active_tab == "Feedback Loop":
-            render_jd_refine_page(logger, analyzer, agent)  # Use the same function for feedback loop
-        elif st.session_state.active_tab == "Candidate Ranking":
-            render_candidate_ranking_page()
-        elif st.session_state.active_tab == "Interview Prep":
-            render_interview_prep_page()
-    except Exception as e:
-        st.error(f"An error occurred: {str(e)}")
-        st.error("Please report this issue to support.")
+    if st.session_state.active_tab == "JD Versions":
+        # For JD Versions tab, render either the enhance or refine page based on current state
+        if st.session_state.current_page == "jd_enhance":
+            render_jd_enhance_page(logger, analyzer, agent)
+        else:  # "jd_refine"
+            render_jd_refine_page(logger, analyzer, agent)
+    elif st.session_state.active_tab == "Feedback Loop":
+        render_jd_refine_page(logger, analyzer, agent)  # Use the same function for feedback loop
+    elif st.session_state.active_tab == "Candidate Ranking":
+        render_candidate_ranking_page()
+    elif st.session_state.active_tab == "Client Feedback":
+        render_client_feedback_page(logger, analyzer, agent)
+    elif st.session_state.active_tab == "Interview Prep":
+        render_interview_prep_page()
     
     # Footer with company info
     st.markdown("---")

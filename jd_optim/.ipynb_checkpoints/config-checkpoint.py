@@ -93,41 +93,47 @@ custom_css = """
         border-radius: 5px;
     }
     
+    /* Drag and drop styles */
+    .drag-container {
+        padding: 10px;
+        border: 2px dashed #ddd;
+        border-radius: 5px;
+        margin-bottom: 10px;
+        background-color: #f8f9fa;
+    }
+    
+    .drag-item {
+        padding: 10px;
+        background-color: white;
+        border: 1px solid #eee;
+        border-radius: 5px;
+        margin-bottom: 8px;
+        cursor: grab;
+    }
+    
+    .drag-item:hover {
+        background-color: #f0f9ff;
+        border-color: #bfdbfe;
+    }
+    
+    .client-feedback-box {
+        background-color: #f0f9ff;
+        border-left: 4px solid #3b82f6;
+        padding: 15px;
+        margin: 10px 0;
+        border-radius: 4px;
+    }
+    
     div[data-testid="stSidebarNav"] {
         background-color: #F3F4F6;
         padding-top: 2rem;
     }
-    /*
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-    }
-    
-    .stTabs [data-baseweb="tab"] {
-        height: 40px;
-        white-space: pre-wrap;
-        background-color: #F9FAFB;
-        border-radius: 4px 4px 0 0;
-        gap: 1px;
-        padding-top: 8px;
-        padding-bottom: 8px;
-    }
-    
-    .stTabs [data-baseweb="tab-list"] button [data-testid="stMarkdownContainer"] p {
-        font-size: 14px;
-        font-weight: 500;
-    }
-    
-    .stTabs [data-baseweb="tab-list"] button[aria-selected="true"] {
-        background-color: #DBEAFE;
-    }*/
 </style>
 """
 
-# In config.py
-
 # AWS API credentials accessed from Streamlit secrets
 AWS_CREDENTIALS = {
-    "access_key": st.secrets["aws"]["access_key"],
-    "secret_key": st.secrets["aws"]["secret_key"],
-    "region": st.secrets["aws"]["region"]
+    "access_key": st.secrets["aws"]["access_key"] if "aws" in st.secrets else "",
+    "secret_key": st.secrets["aws"]["secret_key"] if "aws" in st.secrets else "",
+    "region": st.secrets["aws"]["region"] if "aws" in st.secrets else "us-east-1"
 }
