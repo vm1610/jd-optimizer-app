@@ -163,7 +163,7 @@ def render_jd_optimization_page(logger, analyzer, agent):
                         height=300,
                         disabled=True,
                         key=f"enhanced_version_{idx}"
-        
+                    )
         # Show analysis & comparison tab content
         with enhanced_tabs[1]:
             # Analyze all versions
