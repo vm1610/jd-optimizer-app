@@ -227,7 +227,7 @@ def handle_resume_pool_selection(selection, resume_analyzer, jd_type):
             "unknown": "resumes_analysis_output.csv"
         }
         
-        default_file = default_file_map.get(jd_type, "resumes_analysis_output.csv")
+        default_file = default_file_map.get(jd_type, "Documents/GitHub/jd-optimizer-app/jd_optim/Exctracted Resumes/resumes_analysis_output.csv")
         
         if os.path.exists(default_file):
             try:
