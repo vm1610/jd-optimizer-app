@@ -1,491 +1,501 @@
 import os
 import streamlit as st
-import datetime
+import pandas as pd
+import numpy as np
 import tempfile
-import json
 from docx import Document
-from ui.common import (
-    display_section_header, display_subsection_header,
-    display_warning_message, display_info_message, display_success_message
-)
-from utils.file_utils import read_job_description, save_enhanced_jd
-from utils.visualization import create_multi_radar_chart, create_comparison_dataframe
+from ui.common import display_section_header, display_subsection_header, display_info_message, display_warning_message, display_success_message
+from utils.visualization import create_distribution_chart, create_radar_chart
+from models.resume_analyzer import ResumeAnalyzer
 
-def read_feedback_file(file_path):
-    """Read feedback from a file"""
-    if file_path.endswith('.txt'):
-        with open(file_path, 'r', encoding='utf-8') as file:
-            return file.read()
-    elif file_path.endswith('.docx'):
-        doc = Document(file_path)
-        return '\n'.join([paragraph.text for paragraph in doc.paragraphs])
-    elif file_path.endswith('.csv'):
-        # Read CSV as raw text first
-        with open(file_path, 'r', encoding='utf-8') as file:
-            return file.read()
+def render_candidate_ranking_page(services):
+    """
+    Render the candidate ranking page with enhanced resume pool management
+    
+    Args:
+        services (dict): Dictionary of shared services
+    """
+    # Unpack services
+    logger = services.get('logger')
+    analyzer = services.get('analyzer')
+    agent = services.get('agent')
+    state_manager = services.get('state_manager')
+    
+    display_section_header("🎯 Resume Ranking")
+    
+    # First, check if we have an active JD in our repository
+    jd_repository = state_manager.get('jd_repository', {})
+    jd_content, jd_source_name, jd_unique_id = state_manager.get_jd_content()
+    
+    # Create resume analyzer
+    resume_analyzer = ResumeAnalyzer()
+    
+    # --- Create Layout Columns ---
+    col1, col2, col3 = st.columns([1, 1, 1])
+    
+    with col1:
+        display_subsection_header("Select Position")
+        
+        if not jd_content:
+            # No active JD, need to select one first
+            st.warning("No active job description found.")
+            st.info("Please select a job description in the JD Optimization tab first.")
+            
+            # Show button to navigate to JD Optimization
+            if st.button("Go to JD Optimization", key="goto_jd_opt"):
+                state_manager.set('active_tab', "JD Optimization")
+                st.rerun()
+            
+            return
+        
+        # Show active job description info
+        st.success(f"Using job description: {jd_source_name}")
+        
+        # Detect job type from repository or use default
+        jd_type = jd_repository.get('JD_Type', "general")
+        if not jd_type:
+            jd_type = detect_jd_type(jd_source_name) if jd_source_name else "general"
+        
+        st.markdown(f"**Resume Pool:** {jd_type.replace('_', ' ').title()}")
+        
+        # --- Resume Pool Selection ---
+        display_subsection_header("Resume Pools")
+        
+        # Get resume repository
+        resume_repository = state_manager.get('resume_repository', {})
+        
+        # Initialize resume_pools if empty
+        if not resume_repository.get('pools'):
+            resume_repository['pools'] = []
+            state_manager.set('resume_repository', resume_repository)
+        
+        # Add generic options along with any user-uploaded pools
+        generic_options = ["General", "Data Engineer", "Java Developer"]
+        user_pools = [pool["pool_name"] for pool in resume_repository.get('pools', [])]
+        
+        pool_options = ["(Auto Selection)"] + user_pools + generic_options + ["Upload New Resume Pool"]
+        selected_pool_option = st.selectbox(
+            "Select Resume Pool Manually (Optional)", 
+            pool_options,
+            key="resume_pool_selector"
+        )
+        
+        # Handle resume pool selection
+        resume_df = handle_resume_pool_selection(selected_pool_option, resume_analyzer, jd_type, state_manager)
+        if resume_df is None:
+            st.warning("No resume data available. Please select or upload a valid resume pool.")
+            return
+        
+        # --- Analyze Button ---
+        if st.button('🔍 Analyze Resumes', type="primary", key="analyze_resume_btn"):
+            with st.spinner('Analyzing resumes...'):
+                try:
+                    # Get job description as dict/Series for analysis
+                    job_desc = pd.Series({
+                        'File Name': jd_source_name,
+                        'JD_Type': jd_type,
+                        'Skills': extract_skills_from_text(jd_content),
+                        'Tools': extract_tools_from_text(jd_content)
+                    })
+                    
+                    # Run the analysis
+                    results = resume_analyzer.categorize_resumes(job_desc, resume_df)
+                    
+                    # Store results in state manager
+                    resume_repository['analysis_results'] = results
+                    state_manager.set('resume_repository', resume_repository)
+                    
+                    display_success_message("Resume analysis completed!")
+                    
+                    # Force a rerun to update the UI
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error during analysis: {str(e)}")
+                    
+                    # Create fallback result set with random scores
+                    fallback_results = create_fallback_analysis(resume_df)
+                    resume_repository['analysis_results'] = fallback_results
+                    state_manager.set('resume_repository', resume_repository)
+                    
+                    # Force a rerun to update the UI
+                    st.rerun()
+        
+        # Display top matches preview
+        analysis_results = resume_repository.get('analysis_results')
+        if analysis_results:
+            display_top_matches(analysis_results)
+    
+    # --- Results Display ---
+    analysis_results = resume_repository.get('analysis_results')
+    if analysis_results:
+        # Analysis overview in second column
+        with col2:
+            display_subsection_header("Overview")
+            try:
+                chart = create_distribution_chart(analysis_results)
+                st.plotly_chart(chart, use_container_width=True)
+            except Exception as e:
+                st.error(f"Error creating distribution chart: {str(e)}")
+                display_info_message("Chart visualization failed. Please check your data.")
+        
+        # Detailed analysis in third column
+        with col3:
+            display_subsection_header("Detailed Analysis")
+            if 'top_3' in analysis_results and len(analysis_results['top_3']) > 0:
+                # Get JD as a Series for radar chart
+                job_desc = pd.Series({
+                    'File Name': jd_source_name,
+                    'JD_Type': jd_type,
+                    'Skills': extract_skills_from_text(jd_content),
+                    'Tools': extract_tools_from_text(jd_content)
+                })
+                
+                display_detailed_resume_analysis(analysis_results, job_desc)
+            else:
+                st.info("No detailed analysis available.")
+        
+        # All Resumes by Category section
+        st.markdown("---")
+        display_section_header("📑 All Resumes by Category")
+        display_categorized_resumes(analysis_results)
+
+def detect_jd_type(file_name):
+    """Detect the job description type based on the file name"""
+    file_name = str(file_name).lower()
+    
+    # Define keyword patterns for each type
+    java_python_keywords = ['java', 'python', 'support']
+    data_engineer_keywords = ['data', 'analytics', 'aiml']
+    
+    # Check for Java/Python developer
+    if any(keyword in file_name for keyword in java_python_keywords):
+        return 'java_developer'
+    
+    # Check for Data Engineer
+    elif any(keyword in file_name for keyword in data_engineer_keywords):
+        return 'data_engineer'
+    
+    # Default type
+    return 'general'
+
+def create_sample_resume_df():
+    """Placeholder function that returns an empty DataFrame"""
+    st.warning("No resume data found. Please upload resumes or select a different resume pool.")
+    return pd.DataFrame(columns=['File Name', 'Skills', 'Tools', 'Certifications'])
+
+def extract_skills_from_text(text):
+    """Extract skills from text (simplified version)"""
+    # Real implementation would use NLP or pattern matching
+    common_skills = [
+        'python', 'java', 'javascript', 'react', 'angular', 'node', 'aws', 'azure',
+        'docker', 'kubernetes', 'sql', 'nosql', 'mongodb', 'machine learning', 'ai',
+        'data analysis', 'cloud', 'devops', 'ci/cd', 'agile', 'scrum', 'rest api'
+    ]
+    
+    found_skills = []
+    text_lower = text.lower()
+    for skill in common_skills:
+        if skill in text_lower:
+            found_skills.append(skill)
+    
+    return ", ".join(found_skills)
+
+def extract_tools_from_text(text):
+    """Extract tools from text (simplified version)"""
+    # Real implementation would use NLP or pattern matching
+    common_tools = [
+        'git', 'jenkins', 'travis', 'circle ci', 'jira', 'confluence', 'slack',
+        'vscode', 'intellij', 'eclipse', 'visual studio', 'docker', 'terraform',
+        'ansible', 'chef', 'puppet', 'kubernetes', 'aws cli', 'azure cli'
+    ]
+    
+    found_tools = []
+    text_lower = text.lower()
+    for tool in common_tools:
+        if tool in text_lower:
+            found_tools.append(tool)
+    
+    return ", ".join(found_tools)
+
+def create_fallback_analysis(resume_df):
+    """
+    Create a basic analysis result structure with no dummy data
+    
+    Args:
+        resume_df (DataFrame): Resume DataFrame to generate analysis for
+        
+    Returns:
+        dict: Dictionary with categorized results structure
+    """
+    # Return an empty analysis structure
+    return {
+        'top_3': [],
+        'high_matches': [],
+        'medium_matches': [],
+        'low_matches': []
+    }
+
+def handle_resume_pool_selection(selection, resume_analyzer, jd_type, state_manager):
+    """
+    Handle different resume pool selection options
+    
+    Args:
+        selection (str): Selected pool option
+        resume_analyzer: Resume analyzer instance
+        jd_type (str): Job description type
+        state_manager: State manager instance
+        
+    Returns:
+        DataFrame or None: Resume DataFrame or None if still in selection process
+    """
+    resume_repository = state_manager.get('resume_repository', {})
+    
+    if selection == "(Auto Selection)":
+        # Auto-select resume pool based on JD type
+        default_file_map = {
+            "java_developer": "resumes_analysis_outputJDJavaDeveloper.csv",
+            "data_engineer": "resumes_analysis_output_JDPrincipalSoftwareEngineer.csv",
+            "general": "resumes_analysis_output.csv",
+            "unknown": "resumes_analysis_output.csv"
+        }
+        
+        default_file = default_file_map.get(jd_type, "resumes_analysis_output.csv")
+        
+        # Search in multiple potential directories
+        search_paths = [
+            os.path.join(os.getcwd(), default_file),
+            os.path.join(os.getcwd(), "Data", "Extracted Resumes", default_file),
+            os.path.join(os.getcwd(), "Data", default_file)
+        ]
+        
+        for path in search_paths:
+            if os.path.exists(path):
+                try:
+                    resume_df = pd.read_csv(path)
+                    st.success(f"Loaded default resume pool based on job type ({jd_type})")
+                    return resume_df
+                except Exception as e:
+                    st.error(f"Error loading default resume file: {e}")
+                    continue
+        
+        # If no file found, use sample data
+        st.warning("Default resume pool file not found in expected locations. Using sample data.")
+        return create_sample_resume_df()
+    
+    elif selection == "Upload New Resume Pool":
+       # Create UI for uploading new resumes
+        new_pool_name = st.text_input("Enter new pool name:", key="new_pool_name")
+        new_pool_files = st.file_uploader(
+            "Upload resumes for the new pool", 
+            type=['docx', 'csv'], 
+            accept_multiple_files=True, 
+            key="new_pool_files"
+        )
+        
+        if st.button("Add Resume Pool", key="add_pool"):
+            if new_pool_name and new_pool_files:
+                with st.spinner("Processing resume files..."):
+                    # Process all uploaded resumes
+                    pool_df = resume_analyzer.process_resume_pool(new_pool_files)
+                    
+                    if pool_df is not None and not pool_df.empty:
+                        # Display preview of the processed data
+                        st.success(f"Successfully processed {len(pool_df)} resumes")
+                        
+                        with st.expander("Preview Processed Resumes"):
+                            st.dataframe(pool_df[['File Name', 'Skills', 'Tools']].head(5))
+                        
+                        # Update resume repository
+                        pools = resume_repository.get('pools', [])
+                        pools.append({
+                            "pool_name": new_pool_name, 
+                            "data": pool_df.to_dict('records')  # Convert to dict for storage
+                        })
+                        resume_repository['pools'] = pools
+                        state_manager.set('resume_repository', resume_repository)
+                        
+                        st.success(f"Resume pool '{new_pool_name}' added with {len(pool_df)} resumes!")
+                        st.rerun()
+                    else:
+                        st.warning("No valid resumes were processed. Please check your files.")
+                
+                # Display helpful tips for file formats
+                with st.expander("File Format Tips"):
+                    st.markdown("""
+                    ### DOCX Files
+                    - Each DOCX file is treated as a single resume
+                    - Make sure your DOCX files contain clear sections for skills, experience, etc.
+                    
+                    ### CSV Files
+                    - CSV files can contain either a single resume or multiple resumes
+                    - For multiple resumes, the CSV should have columns: `File Name`, `Skills`, `Tools`, and optionally `Certifications`
+                    - Column names are case-sensitive, but the system will try to match lowercase alternatives
+                    """)
+            else:
+                st.warning("Please provide both a pool name and upload at least one resume file.")
+        
+        elif selection in ["General", "Data Engineer", "Java Developer"]:
+            # Load from predefined files
+            generic_map = {
+                "General": "resumes_analysis_output.csv",
+                "Data Engineer": "resumes_analysis_output_JDPrincipalSoftwareEngineer.csv",
+                "Java Developer": "resumes_analysis_outputJDJavaDeveloper.csv"
+            }
+            default_file = generic_map[selection]
+            
+            # Search in multiple potential directories
+            search_paths = [
+                os.path.join(os.getcwd(), default_file),
+                os.path.join(os.getcwd(), "Data", "Extracted Resumes", default_file),
+                os.path.join(os.getcwd(), "Data", default_file)
+            ]
+            
+            for path in search_paths:
+                if os.path.exists(path):
+                    try:
+                        resume_df = pd.read_csv(path)
+                        st.success(f"Loaded {selection} resume pool")
+                        return resume_df
+                    except Exception as e:
+                        st.error(f"Error loading resume file: {e}")
+                        continue
+            
+            # If no file found, return none
+            st.warning(f"Resume pool file for {selection} not found.")
+            return None
+        
+        else:
+            # Check if a user-uploaded pool was selected
+            pools = resume_repository.get('pools', [])
+            for pool in pools:
+                if pool["pool_name"] == selection:
+                    # Convert stored dict back to DataFrame
+                    pool_df = pd.DataFrame(pool["data"])
+                    st.success(f"Loaded custom resume pool '{selection}' with {len(pool_df)} resumes")
+                    return pool_df
+    
+    # Default fallback - don't create a sample resume
+    st.warning("No valid resume pool selected.")
+    return None
+
+def display_top_matches(analysis_results):
+    """Display top match previews"""
+    display_subsection_header("Top Matches")
+    if 'top_3' in analysis_results and analysis_results['top_3']:
+        for i, resume in enumerate(analysis_results['top_3'][:3]):
+            st.markdown(f"""
+            <div class="metric-card">
+                <h4 style="margin:0">#{i + 1} - {resume['Resume ID']}</h4>
+                <p style="margin:0">Match: {resume['Score']:.2%}</p>
+            </div>
+            """, unsafe_allow_html=True)
     else:
-        raise ValueError("Unsupported file format")
+        st.info("No top matches available yet. Click 'Analyze Resumes' to see results.")
 
-def process_uploaded_docx(uploaded_file):
-    """Process an uploaded docx file and return its content"""
+def display_detailed_resume_analysis(categorized_resumes, job_desc):
+    """Display detailed analysis of top resumes"""
+    if not categorized_resumes['top_3']:
+        st.info("No resume analysis data available")
+        return
+        
+    tabs = st.tabs(["#1", "#2", "#3"])
+    
+    for i, (tab, resume) in enumerate(zip(tabs, categorized_resumes['top_3'][:3])):
+        with tab:
+            col_a, col_b = st.columns([1, 1])
+            with col_a:
+                st.markdown(f"**Score:** {resume['Score']:.2%}")
+                try:
+                    radar_chart = create_radar_chart(resume, job_desc)
+                    st.plotly_chart(radar_chart, use_container_width=True)
+                except Exception as e:
+                    st.error(f"Error creating radar chart: {str(e)}")
+                    st.info("Match analysis visualization unavailable")
+            
+            with col_b:
+                st.markdown(f"""
+                <div class="insight-box compact-text">
+                    <h4>Key Match Analysis</h4>
+                    <p>This candidate shows alignment with the job requirements based on their skills and experience:</p>
+                    <ul>
+                        <li>Technical skills match core requirements</li>
+                        <li>Experience with relevant tools and technologies</li>
+                        <li>{resume.get('Certifications', 'Experience')} enhances qualifications</li>
+                    </ul>
+                    <p><strong>Overall assessment:</strong> Good potential match based on technical qualifications.</p>
+                </div>
+                """, unsafe_allow_html=True)
+
+def display_categorized_resumes(categorized_resumes):
+    """Display all resumes categorized by match level"""
+    cat_col1, cat_col2, cat_col3 = st.columns(3)
+    
+    with cat_col1:
+        with st.expander(f"High Matches ({len(categorized_resumes.get('high_matches', []))})"):
+            for resume in categorized_resumes.get('high_matches', []):
+                st.markdown(f"""
+                <div class="category-high">
+                    <h4 style="margin:0">{resume['Resume ID']}</h4>
+                    <p style="margin:0">Match: {resume['Score']:.2%}</p>
+                </div>
+                """, unsafe_allow_html=True)
+    
+    with cat_col2:
+        with st.expander(f"Medium Matches ({len(categorized_resumes.get('medium_matches', []))})"):
+            for resume in categorized_resumes.get('medium_matches', []):
+                st.markdown(f"""
+                <div class="category-medium">
+                    <h4 style="margin:0">{resume['Resume ID']}</h4>
+                    <p style="margin:0">Match: {resume['Score']:.2%}</p>
+                </div>
+                """, unsafe_allow_html=True)
+    
+    with cat_col3:
+        with st.expander(f"Low Matches ({len(categorized_resumes.get('low_matches', []))})"):
+            for resume in categorized_resumes.get('low_matches', []):
+                st.markdown(f"""
+                <div class="category-low">
+                    <h4 style="margin:0">{resume['Resume ID']}</h4>
+                    <p style="margin:0">Match: {resume['Score']:.2%}</p>
+                </div>
+                """, unsafe_allow_html=True)
+
+def analyze_uploaded_resume(uploaded_file):
+    """Analyze a user-uploaded resume (.docx) and extract the information"""
+    # Only process .docx files
+    if not uploaded_file.name.endswith(".docx"):
+        raise ValueError(f"Unsupported file format for {uploaded_file.name}. Only .docx files are supported.")
+    
+    # Create a temporary file
     with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
         tmp.write(uploaded_file.getvalue())
         temp_path = tmp.name
     
     try:
+        # Extract text from the document
         doc = Document(temp_path)
-        content = '\n'.join([paragraph.text for paragraph in doc.paragraphs])
-        return content
+        resume_text = "\n".join([para.text for para in doc.paragraphs])
+        
+        # Extract skills (simplified)
+        skills = extract_skills_from_text(resume_text)
+        tools = extract_tools_from_text(resume_text)
+        
+        # Detect certifications (very simplified)
+        cert_keywords = ['certified', 'certification', 'certificate', 'aws', 'azure', 
+                       'google', 'professional', 'associate', 'expert']
+        has_cert = any(kw in resume_text.lower() for kw in cert_keywords)
+        certification = "Certification detected" if has_cert else "None specified"
+        
+        return {
+            'File Name': uploaded_file.name,
+            'Skills': skills,
+            'Tools': tools,
+            'Certifications': certification
+        }
+    except Exception as e:
+        st.error(f"Error analyzing resume {uploaded_file.name}: {e}")
+        return None
     finally:
+        # Always remove the temporary file
         if os.path.exists(temp_path):
             os.remove(temp_path)
-
-def process_csv_content(csv_content, column_type="feedback"):
-    """Extract content from CSV files based on column type"""
-    try:
-        import pandas as pd
-        df = pd.read_csv(pd.StringIO(csv_content))
-        
-        # Define potential column names based on content type
-        if column_type == "feedback":
-            potential_columns = ['feedback', 'comments', 'notes', 'review', 'suggestions', 'input']
-        else:  # job description
-            potential_columns = ['job_description', 'description', 'jd', 'content', 'text']
-        
-        # Find the first matching column or use the first text column
-        target_column = None
-        for col in potential_columns:
-            if col in df.columns:
-                target_column = col
-                break
-        
-        if target_column is None:
-            # If no matching column found, use the first column that seems to have text content
-            for col in df.columns:
-                if df[col].dtype == 'object' and df[col].str.len().mean() > (50 if column_type == "jd" else 20):
-                    target_column = col
-                    break
-        
-        if target_column:
-            if column_type == "feedback":
-                # Combine all feedback entries
-                combined_content = "\n\n".join(df[target_column].dropna().tolist())
-                return combined_content, f"Extracted {len(df[target_column].dropna())} entries from column: {target_column}"
-            else:
-                # For JD, just use the first non-empty value
-                return df[target_column].dropna().iloc[0], f"Extracted job description from column: {target_column}"
-        
-        # Fallback - concatenate all text columns
-        text_cols = [col for col in df.columns if df[col].dtype == 'object']
-        combined_content = "\n\n".join([f"{col}:\n{df[col].iloc[0]}" for col in text_cols[:5]])
-        return combined_content, f"Could not identify a specific {column_type} column. Using combined text from CSV."
-    except Exception as e:
-        return csv_content, f"Error processing CSV structure: {str(e)}. Using raw CSV content."
-
-def render_client_feedback_page(logger, analyzer, agent):
-    """Render the Client Feedback tab with JD + Feedback drop zones"""
-    display_section_header("💬 Client Feedback Enhancement")
-    
-    # Initialize session state variables if they don't exist
-    if 'client_jd' not in st.session_state:
-        st.session_state.client_jd = ""
-    if 'client_feedback' not in st.session_state:
-        st.session_state.client_feedback = ""
-    if 'client_feedback_type_value' not in st.session_state:
-        st.session_state.client_feedback_type_value = "Client Feedback"
-    if 'client_enhanced_jd' not in st.session_state:
-        st.session_state.client_enhanced_jd = None
-    
-    # Create two columns for file upload
-    jd_col, feedback_col = st.columns(2)
-    
-    # --- Job Description Column ---
-    with jd_col:
-        display_subsection_header("Upload Job Description")
-        
-        # Option to use final enhanced version from the previous steps
-        use_final_version = False
-        if st.session_state.get('final_version'):
-            use_final_version = st.checkbox(
-                "Use previously generated final version", 
-                value=False,
-                help="Check this to use the final version you generated in the JD Optimization tab"
-            )
-        
-        if use_final_version:
-            jd_content = st.session_state.final_version
-            st.success("Using previously generated final version.")
-            st.session_state.client_jd = jd_content
-            
-            # Preview
-            with st.expander("Preview Job Description", expanded=False):
-                st.text_area("Job Description Content", jd_content, height=200, disabled=True)
-        else:
-            jd_file = st.file_uploader(
-                "📄 Drop or upload a Job Description",
-                type=["txt", "docx", "csv"],
-                key="client_jd_upload",
-                help="Upload the job description you want to enhance (TXT, DOCX, or CSV)"
-            )
-            
-            # Process uploaded JD file if present
-            if jd_file:
-                try:
-                    if jd_file.name.endswith(".txt"):
-                        job_description = jd_file.getvalue().decode("utf-8")
-                    elif jd_file.name.endswith(".csv"):
-                        # Special handling for CSV
-                        csv_content = jd_file.getvalue().decode("utf-8")
-                        job_description, message = process_csv_content(csv_content, "jd")
-                        st.info(message)
-                    elif jd_file.name.endswith(".docx"):
-                        job_description = process_uploaded_docx(jd_file)
-                    else:
-                        st.error("Unsupported file format.")
-                        return
-                    
-                    # Store in session state
-                    st.session_state.client_jd = job_description
-                    
-                    # Preview
-                    with st.expander("Preview Job Description", expanded=False):
-                        st.text_area("Job Description Content", job_description, height=200, disabled=True)
-                except Exception as e:
-                    st.error(f"Error reading file: {str(e)}")
-    
-    # --- Client Feedback Column ---
-    with feedback_col:
-        display_subsection_header("Upload Client Feedback")
-        
-        # Create tabs for feedback methods
-        feedback_tabs = st.tabs(["Upload Feedback File", "Select from Directory", "Enter Manually"])
-        
-        # Define feedback types
-        feedback_types = [
-            "Client Feedback", 
-            "Rejected Candidate Feedback", 
-            "Hiring Manager Feedback", 
-            "Selected Candidate Feedback", 
-            "Interview Feedback"
-        ]
-        
-        # 1. Upload feedback file tab
-        with feedback_tabs[0]:
-            feedback_file = st.file_uploader(
-                "📝 Drop or upload Feedback File",
-                type=["txt", "docx", "csv"],
-                key="client_feedback_upload",
-                help="Upload the feedback from your client (TXT, DOCX, or CSV)"
-            )
-            
-            # Feedback type selection
-            selected_feedback_type = st.selectbox(
-                "Feedback Type:",
-                options=feedback_types,
-                index=feedback_types.index(st.session_state.client_feedback_type_value) 
-                    if st.session_state.client_feedback_type_value in feedback_types else 0,
-                key="client_feedback_type"
-            )
-            
-            # Update session state
-            st.session_state.client_feedback_type_value = selected_feedback_type
-            
-            # Process uploaded feedback file
-            if feedback_file:
-                try:
-                    if feedback_file.name.endswith(".txt"):
-                        client_feedback = feedback_file.getvalue().decode("utf-8")
-                    elif feedback_file.name.endswith(".csv"):
-                        # Special handling for CSV
-                        csv_content = feedback_file.getvalue().decode("utf-8")
-                        client_feedback, message = process_csv_content(csv_content, "feedback")
-                        st.info(message)
-                    elif feedback_file.name.endswith(".docx"):
-                        client_feedback = process_uploaded_docx(feedback_file)
-                    else:
-                        st.error("Unsupported file format.")
-                        return
-                    
-                    # Store in session state
-                    st.session_state.client_feedback = client_feedback
-                    
-                    # Preview
-                    with st.expander("Preview Feedback", expanded=True):
-                        st.text_area("Feedback Content", client_feedback, height=200, disabled=True)
-                except Exception as e:
-                    st.error(f"Error reading feedback file: {str(e)}")
-        
-        # 2. Select from directory tab
-        with feedback_tabs[1]:
-            feedback_directory = os.path.join(os.getcwd(), "Feedbacks")
-            
-            if not os.path.exists(feedback_directory):
-                display_warning_message("The 'Feedbacks' directory does not exist. Create it or upload a file directly.")
-            else:
-                try:
-                    feedback_files = [f for f in os.listdir(feedback_directory) 
-                                    if f.endswith(('.txt', '.docx', '.csv'))]
-                    
-                    if not feedback_files:
-                        display_warning_message("No feedback files found in the Feedbacks directory.")
-                    else:
-                        # Allow user to select a feedback file
-                        selected_feedback_file = st.selectbox(
-                            "Select Feedback File",
-                            feedback_files,
-                            help="Choose a feedback file to process",
-                            key="folder_feedback_file"
-                        )
-                        
-                        # Select feedback type
-                        file_feedback_type = st.selectbox(
-                            "Feedback Type:",
-                            options=feedback_types,
-                            index=feedback_types.index(st.session_state.client_feedback_type_value)
-                                if st.session_state.client_feedback_type_value in feedback_types else 0,
-                            key="file_feedback_type"
-                        )
-                        
-                        # Add a button to load the selected file
-                        if st.button("Load Selected File", key="load_feedback_file"):
-                            if selected_feedback_file:
-                                feedback_path = os.path.join(feedback_directory, selected_feedback_file)
-                                
-                                if not os.path.exists(feedback_path):
-                                    st.error(f"File not found: {feedback_path}")
-                                else:
-                                    try:
-                                        if selected_feedback_file.endswith('.csv'):
-                                            with open(feedback_path, 'r', encoding='utf-8') as f:
-                                                csv_content = f.read()
-                                            feedback_content, message = process_csv_content(csv_content, "feedback")
-                                            st.info(message)
-                                        else:
-                                            feedback_content = read_feedback_file(feedback_path)
-                                        
-                                        # Store in session state
-                                        st.session_state.client_feedback = feedback_content
-                                        st.session_state.client_feedback_type_value = file_feedback_type
-                                        
-                                        # Display preview
-                                        st.text_area(
-                                            "Feedback Content",
-                                            feedback_content,
-                                            height=200,
-                                            disabled=True,
-                                            key="folder_feedback_content"
-                                        )
-                                        
-                                        st.success(f"Successfully loaded feedback from {selected_feedback_file}")
-                                    except Exception as e:
-                                        st.error(f"Error reading feedback file: {str(e)}")
-                except Exception as e:
-                    st.error(f"Error accessing Feedbacks directory: {str(e)}")
-        
-        # 3. Manual input tab
-        with feedback_tabs[2]:
-            manual_feedback = st.text_area(
-                "Enter client feedback:",
-                height=200,
-                placeholder="Enter the feedback from your client here...",
-                key="manual_client_feedback"
-            )
-            
-            manual_feedback_type = st.selectbox(
-                "Feedback Type:",
-                options=feedback_types,
-                index=feedback_types.index(st.session_state.client_feedback_type_value)
-                    if st.session_state.client_feedback_type_value in feedback_types else 0,
-                key="manual_feedback_type"
-            )
-            
-            if st.button("Use This Feedback", key="use_manual_feedback"):
-                if manual_feedback.strip():
-                    st.session_state.client_feedback = manual_feedback
-                    st.session_state.client_feedback_type_value = manual_feedback_type
-                    st.success("Manual feedback saved!")
-                else:
-                    st.warning("Please enter some feedback first.")
-    
-    # --- Generate Enhanced JD Button ---
-    st.markdown("---")
-    display_subsection_header("Generate Enhanced Job Description")
-    
-    generate_col1, generate_col2 = st.columns([3, 1])
-    
-    with generate_col1:
-        generate_btn = st.button(
-            "🚀 Generate Enhanced Job Description", 
-            type="primary", 
-            key="generate_client_enhanced_jd",
-            help="Generate an enhanced version of the job description based on client feedback"
-        )
-    
-    with generate_col2:
-        st.caption("AI will enhance the job description based on the provided client feedback.")
-    
-    # Handle generation process
-    if generate_btn:
-        if not st.session_state.client_jd:
-            st.warning("Please provide a job description before generating.")
-            return
-            
-        if not st.session_state.client_feedback:
-            st.warning("Please provide client feedback before generating.")
-            return
-        
-        job_description = st.session_state.client_jd
-        client_feedback = st.session_state.client_feedback
-        feedback_type = st.session_state.client_feedback_type_value
-        
-        with st.spinner("Enhancing job description with client feedback..."):
-            try:
-                # Create feedback object with type
-                feedback_obj = {
-                    "feedback": client_feedback,
-                    "type": feedback_type,
-                    "role": st.session_state.role
-                }
-                
-                # Add to the logger's feedback history
-                logger.current_state["feedback_history"].append(feedback_obj)
-                logger._save_state()
-                
-                # Log the action
-                logger.current_state["actions"].append({
-                    "action": "client_feedback",
-                    "timestamp": datetime.datetime.now().isoformat(),
-                    "feedback_type": feedback_type
-                })
-                logger._save_state()
-                
-                # Create the prompt for the agent
-                prompt = (
-                    "You are an expert in job description refinement.\n\n"
-                    "Please revise the provided job description **only based on the feedback** given by the client.\n\n"
-                    "Do not introduce any information or changes not explicitly stated in the feedback.\n"
-                    "Only make edits that directly reflect specific feedback content.\n\n"
-                    "**Guidelines:**\n"
-                    "- Do not make assumptions.\n"
-                    "- Do not change formatting or structure unless required by feedback.\n"
-                    "- Refer to the position as 'this role'.\n"
-                    "- If the feedback is vague or irrelevant, leave the job description unchanged.\n\n"
-                    f"### Original Job Description:\n{job_description}\n\n"
-                    f"### Client Feedback:\n{client_feedback}\n\n"
-                    "### Please return only the revised job description below (leave unchanged if no edits are needed):\n"
-                )
-                
-                # Call the agent to generate the enhanced JD
-                native_request = {
-                    "anthropic_version": "bedrock-2023-05-31",
-                    "max_tokens": 1024,
-                    "temperature": 0.7,
-                    "messages": [{"role": "user", "content": prompt}],
-                }
-                
-                response = agent.client.invoke_model(
-                    modelId=agent.model_id,
-                    body=json.dumps(native_request),
-                    contentType="application/json",
-                )
-                response_body = json.loads(response["body"].read().decode("utf-8"))
-                
-                if isinstance(response_body, dict) and "content" in response_body:
-                    content = response_body["content"]
-                    if isinstance(content, list):
-                        enhanced_jd = " ".join([item.get("text", "") for item in content]).strip()
-                    else:
-                        enhanced_jd = content if isinstance(content, str) else "[No valid content returned]"
-                else:
-                    enhanced_jd = "[Unexpected response format]"
-                
-                # Store the enhanced JD in session state
-                st.session_state.client_enhanced_jd = enhanced_jd
-                
-                # Log the enhanced version
-                logger.log_enhanced_version(enhanced_jd, is_final=True)
-                
-                # Display success message
-                display_success_message("Job description enhanced successfully based on client feedback!")
-                
-                # Force page refresh to show results
-                st.rerun()
-            except Exception as e:
-                st.error(f"Error enhancing job description: {str(e)}")
-                st.error("Please try again or contact support if the problem persists.")
-    
-    # --- Display Results ---
-    if 'client_enhanced_jd' in st.session_state and st.session_state.client_enhanced_jd:
-        # Display results in an organized layout
-        st.markdown("---")
-        display_section_header("Results")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            display_subsection_header("Original Job Description")
-            st.text_area(
-                "Original Content",
-                st.session_state.client_jd,
-                height=300,
-                disabled=True,
-                key="client_original_jd_display"
-            )
-        
-        with col2:
-            display_subsection_header("Enhanced Job Description")
-            st.text_area(
-                "Enhanced Content",
-                st.session_state.client_enhanced_jd,
-                height=300,
-                key="client_enhanced_jd_display"
-            )
-        
-        # Compare original vs enhanced with skill analysis
-        if st.session_state.client_jd and st.session_state.client_enhanced_jd:
-            display_section_header("Comparison Analysis")
-            
-            # Analyze both versions
-            original_scores = analyzer.analyze_text(st.session_state.client_jd)
-            enhanced_scores = analyzer.analyze_text(st.session_state.client_enhanced_jd)
-            
-            comp_col1, comp_col2 = st.columns([1, 1])
-            
-            with comp_col1:
-                display_subsection_header("Skill Coverage Comparison")
-                radar_chart = create_multi_radar_chart({'Original': original_scores, 'Enhanced': enhanced_scores})
-                st.plotly_chart(radar_chart, use_container_width=True, key="client_radar")
-            
-            with comp_col2:
-                display_subsection_header("Detailed Analysis")
-                comparison_df = create_comparison_dataframe({'Original': original_scores, 'Enhanced': enhanced_scores})
-                st.dataframe(
-                    comparison_df,
-                    height=400,
-                    use_container_width=True,
-                    hide_index=True,
-                    key="client_comparison"
-                )
-                st.caption("Percentages indicate keyword coverage in each category")
-        
-        # Download options
-        display_section_header("Download Options")
-        
-        download_col1, download_col2 = st.columns(2)
-        
-        with download_col1:
-            st.download_button(
-                label="Download as TXT",
-                data=st.session_state.client_enhanced_jd,
-                file_name=f"client_enhanced_jd_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-                mime="text/plain",
-                key="client_download_txt"
-            )
-            logger.log_download("txt", f"client_enhanced_jd_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")
-        
-        with download_col2:
-            if st.button("Download as DOCX", key="client_download_docx"):
-                docx_filename = f"client_enhanced_jd_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
-                save_enhanced_jd(st.session_state.client_enhanced_jd, docx_filename, 'docx')
-                display_success_message(f"Saved as {docx_filename}")
-                logger.log_download("docx", docx_filename)

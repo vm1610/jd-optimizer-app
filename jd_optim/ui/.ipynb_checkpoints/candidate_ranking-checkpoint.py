@@ -2,22 +2,32 @@ import os
 import streamlit as st
 import pandas as pd
 import numpy as np
-from models.resume_analyzer import ResumeAnalyzer
-from utils.text_processing import detect_jd_type
+import tempfile
+from docx import Document
+from ui.common import display_section_header, display_subsection_header, display_info_message, display_warning_message, display_success_message
 from utils.visualization import create_distribution_chart, create_radar_chart
-from ui.common import display_section_header, display_subsection_header, display_info_message, display_warning_message
+from models.resume_analyzer import ResumeAnalyzer
 
-def render_candidate_ranking_page():
-    """Render the candidate ranking page with enhanced resume pool management"""
+def render_candidate_ranking_page(services):
+    """
+    Render the candidate ranking page with enhanced resume pool management
+    
+    Args:
+        services (dict): Dictionary of shared services
+    """
+    # Unpack services
+    logger = services.get('logger')
+    analyzer = services.get('analyzer')
+    agent = services.get('agent')
+    state_manager = services.get('state_manager')
     
     display_section_header("🎯 Resume Ranking")
     
-    # --- Load Job Data ---
-    job_df = load_job_descriptions()
-    if job_df is None:
-        return
+    # First, check if we have an active JD in our repository
+    jd_repository = state_manager.get('jd_repository', {})
+    jd_content, jd_source_name, jd_unique_id = state_manager.get_jd_content()
     
-    # --- Setup Resume Analyzer ---
+    # Create resume analyzer
     resume_analyzer = ResumeAnalyzer()
     
     # --- Create Layout Columns ---
@@ -26,52 +36,42 @@ def render_candidate_ranking_page():
     with col1:
         display_subsection_header("Select Position")
         
-        # Combine job names with enhanced versions if available
-        job_names = job_df['File Name'].tolist()
-        if st.session_state.get('final_version'):
-            job_names.append("Final Enhanced Version")
-        if st.session_state.get('client_enhanced_jd'):
-            job_names.append("Client Enhanced Version")
+        if not jd_content:
+            # No active JD, need to select one first
+            st.warning("No active job description found.")
+            st.info("Please select a job description in the JD Optimization tab first.")
+            
+            # Show button to navigate to JD Optimization
+            if st.button("Go to JD Optimization", key="goto_jd_opt"):
+                state_manager.set('active_tab', "JD Optimization")
+                st.rerun()
+            
+            return
         
-        selected = st.selectbox('Choose position:', job_names, label_visibility="collapsed")
+        # Show active job description info
+        st.success(f"Using job description: {jd_source_name}")
         
-        # Set job_desc based on selection
-        if selected == "Final Enhanced Version":
-            if st.session_state.get('final_version'):
-                job_desc = create_job_desc_from_enhanced("Final Enhanced Version", 
-                                                       st.session_state.final_version)
-            else:
-                st.warning("No final enhanced job description available.")
-                if job_df.shape[0] > 0:
-                    job_desc = job_df.iloc[0]
-                else:
-                    return
-        elif selected == "Client Enhanced Version":
-            if st.session_state.get('client_enhanced_jd'):
-                job_desc = create_job_desc_from_enhanced("Client Enhanced Version", 
-                                                       st.session_state.client_enhanced_jd)
-            else:
-                st.warning("No client enhanced job description available.")
-                if job_df.shape[0] > 0:
-                    job_desc = job_df.iloc[0]
-                else:
-                    return
-        else:
-            job_desc = job_df[job_df['File Name'] == selected].iloc[0]
+        # Detect job type from repository or use default
+        jd_type = jd_repository.get('JD_Type', "general")
+        if not jd_type:
+            jd_type = detect_jd_type(jd_source_name) if jd_source_name else "general"
         
-        jd_type = job_desc['JD_Type']
         st.markdown(f"**Resume Pool:** {jd_type.replace('_', ' ').title()}")
         
         # --- Resume Pool Selection ---
         display_subsection_header("Resume Pools")
         
-        # Initialize resume_pools in session state if it doesn't exist
-        if "resume_pools" not in st.session_state:
-            st.session_state.resume_pools = []  # List of dicts: {"pool_name": str, "data": DataFrame}
+        # Get resume repository
+        resume_repository = state_manager.get('resume_repository', {})
+        
+        # Initialize resume_pools if empty
+        if not resume_repository.get('pools'):
+            resume_repository['pools'] = []
+            state_manager.set('resume_repository', resume_repository)
         
         # Add generic options along with any user-uploaded pools
         generic_options = ["General", "Data Engineer", "Java Developer"]
-        user_pools = [pool["pool_name"] for pool in st.session_state.resume_pools]
+        user_pools = [pool["pool_name"] for pool in resume_repository.get('pools', [])]
         
         pool_options = ["(Auto Selection)"] + user_pools + generic_options + ["Upload New Resume Pool"]
         selected_pool_option = st.selectbox(
@@ -81,7 +81,7 @@ def render_candidate_ranking_page():
         )
         
         # Handle resume pool selection
-        resume_df = handle_resume_pool_selection(selected_pool_option, resume_analyzer, jd_type)
+        resume_df = handle_resume_pool_selection(selected_pool_option, resume_analyzer, jd_type, state_manager)
         if resume_df is None:
             st.warning("No resume data available. Please select or upload a valid resume pool.")
             return
@@ -90,29 +90,49 @@ def render_candidate_ranking_page():
         if st.button('🔍 Analyze Resumes', type="primary", key="analyze_resume_btn"):
             with st.spinner('Analyzing resumes...'):
                 try:
-                    st.session_state['analysis_results'] = resume_analyzer.categorize_resumes(job_desc, resume_df)
+                    # Get job description as dict/Series for analysis
+                    job_desc = pd.Series({
+                        'File Name': jd_source_name,
+                        'JD_Type': jd_type,
+                        'Skills': extract_skills_from_text(jd_content),
+                        'Tools': extract_tools_from_text(jd_content)
+                    })
+                    
+                    # Run the analysis
+                    results = resume_analyzer.categorize_resumes(job_desc, resume_df)
+                    
+                    # Store results in state manager
+                    resume_repository['analysis_results'] = results
+                    state_manager.set('resume_repository', resume_repository)
+                    
+                    display_success_message("Resume analysis completed!")
+                    
+                    # Force a rerun to update the UI
+                    st.rerun()
                 except Exception as e:
                     st.error(f"Error during analysis: {str(e)}")
                     
                     # Create fallback result set with random scores
-                    st.session_state['analysis_results'] = create_fallback_analysis(resume_df)
-                
-                # Force a rerun to update the UI
-                st.rerun()
+                    fallback_results = create_fallback_analysis(resume_df)
+                    resume_repository['analysis_results'] = fallback_results
+                    state_manager.set('resume_repository', resume_repository)
+                    
+                    # Force a rerun to update the UI
+                    st.rerun()
         
         # Display top matches preview
-        if 'analysis_results' in st.session_state:
-            display_top_matches(st.session_state['analysis_results'])
+        analysis_results = resume_repository.get('analysis_results')
+        if analysis_results:
+            display_top_matches(analysis_results)
     
     # --- Results Display ---
-    if 'analysis_results' in st.session_state:
-        categorized_resumes = st.session_state['analysis_results']
-        
+    analysis_results = resume_repository.get('analysis_results')
+    if analysis_results:
         # Analysis overview in second column
         with col2:
             display_subsection_header("Overview")
             try:
-                chart = create_distribution_chart(categorized_resumes)
+                chart = create_distribution_chart(analysis_results)
                 st.plotly_chart(chart, use_container_width=True)
             except Exception as e:
                 st.error(f"Error creating distribution chart: {str(e)}")
@@ -121,103 +141,115 @@ def render_candidate_ranking_page():
         # Detailed analysis in third column
         with col3:
             display_subsection_header("Detailed Analysis")
-            if 'top_3' in categorized_resumes and len(categorized_resumes['top_3']) > 0:
-                display_detailed_resume_analysis(categorized_resumes, job_desc)
+            if 'top_3' in analysis_results and len(analysis_results['top_3']) > 0:
+                # Get JD as a Series for radar chart
+                job_desc = pd.Series({
+                    'File Name': jd_source_name,
+                    'JD_Type': jd_type,
+                    'Skills': extract_skills_from_text(jd_content),
+                    'Tools': extract_tools_from_text(jd_content)
+                })
+                
+                display_detailed_resume_analysis(analysis_results, job_desc)
             else:
                 st.info("No detailed analysis available.")
         
         # All Resumes by Category section
         st.markdown("---")
         display_section_header("📑 All Resumes by Category")
-        display_categorized_resumes(categorized_resumes)
+        display_categorized_resumes(analysis_results)
 
-
-def load_job_descriptions():
-    """Load job descriptions from files or create sample data"""
-    jd_directory = os.path.join(os.getcwd(), "JDs")
+def detect_jd_type(file_name):
+    """Detect the job description type based on the file name"""
+    file_name = str(file_name).lower()
     
-    try:
-        # Try to list files from JDs directory
-        if os.path.exists(jd_directory):
-            files = [f for f in os.listdir(jd_directory) if f.endswith(('.txt', '.docx'))]
-            
-            if files:
-                # Create a basic dataframe with file names
-                job_data = {
-                    'File Name': files,
-                    'Skills': [''] * len(files),
-                    'Tools': [''] * len(files),
-                    'JD_Type': [detect_jd_type(file) for file in files]
-                }
-                return pd.DataFrame(job_data)
+    # Define keyword patterns for each type
+    java_python_keywords = ['java', 'python', 'support']
+    data_engineer_keywords = ['data', 'analytics', 'aiml']
+    
+    # Check for Java/Python developer
+    if any(keyword in file_name for keyword in java_python_keywords):
+        return 'java_developer'
+    
+    # Check for Data Engineer
+    elif any(keyword in file_name for keyword in data_engineer_keywords):
+        return 'data_engineer'
+    
+    # Default type
+    return 'general'
+
+def create_sample_resume_df():
+    """Placeholder function that returns an empty DataFrame"""
+    st.warning("No resume data found. Please upload resumes or select a different resume pool.")
+    return pd.DataFrame(columns=['File Name', 'Skills', 'Tools', 'Certifications'])
+
+def extract_skills_from_text(text):
+    """Extract skills from text (simplified version)"""
+    # Real implementation would use NLP or pattern matching
+    common_skills = [
+        'python', 'java', 'javascript', 'react', 'angular', 'node', 'aws', 'azure',
+        'docker', 'kubernetes', 'sql', 'nosql', 'mongodb', 'machine learning', 'ai',
+        'data analysis', 'cloud', 'devops', 'ci/cd', 'agile', 'scrum', 'rest api'
+    ]
+    
+    found_skills = []
+    text_lower = text.lower()
+    for skill in common_skills:
+        if skill in text_lower:
+            found_skills.append(skill)
+    
+    return ", ".join(found_skills)
+
+def extract_tools_from_text(text):
+    """Extract tools from text (simplified version)"""
+    # Real implementation would use NLP or pattern matching
+    common_tools = [
+        'git', 'jenkins', 'travis', 'circle ci', 'jira', 'confluence', 'slack',
+        'vscode', 'intellij', 'eclipse', 'visual studio', 'docker', 'terraform',
+        'ansible', 'chef', 'puppet', 'kubernetes', 'aws cli', 'azure cli'
+    ]
+    
+    found_tools = []
+    text_lower = text.lower()
+    for tool in common_tools:
+        if tool in text_lower:
+            found_tools.append(tool)
+    
+    return ", ".join(found_tools)
+
+def create_fallback_analysis(resume_df):
+    """
+    Create a basic analysis result structure with no dummy data
+    
+    Args:
+        resume_df (DataFrame): Resume DataFrame to generate analysis for
         
-        # If no JD directory or no files, try to load analysis file
-        analysis_file = "job_descriptions_analysis_output.csv"
-        if os.path.exists(analysis_file):
-            job_df = pd.read_csv(analysis_file)
-            
-            # Add JD_Type if it doesn't exist
-            if 'JD_Type' not in job_df.columns:
-                job_df['JD_Type'] = 'unknown'
-                
-                # Add job types based on file names
-                java_python_keywords = ['java', 'python', 'support']
-                data_engineer_keywords = ['data', 'engineer', 'analytics']
-                
-                for index, row in job_df.iterrows():
-                    file_name = str(row['File Name']).lower()
-                    if any(keyword in file_name for keyword in java_python_keywords):
-                        job_df.at[index, 'JD_Type'] = 'java_developer'
-                    elif any(keyword in file_name for keyword in data_engineer_keywords):
-                        job_df.at[index, 'JD_Type'] = 'data_engineer'
-                    else:
-                        job_df.at[index, 'JD_Type'] = 'general'
-            
-            return job_df
-    
-    except Exception as e:
-        st.error(f"Error loading job data: {e}")
-    
-    # Create sample data as a fallback
-    st.warning("No job description files found. Using sample data instead.")
-    job_data = {
-        'File Name': ['DataAnalyticsAIMLJD.txt', 'JobDescriptionJavaPythonSupport.txt'],
-        'Skills': ['Python, Java, ML, AI, Data Analysis', 'Java, Python, Object-Oriented Programming'],
-        'Tools': ['SQL, Cloud, Docker', 'Debugging tools, CoderPad'],
-        'JD_Type': ['data_engineer', 'java_developer']
+    Returns:
+        dict: Dictionary with categorized results structure
+    """
+    # Return an empty analysis structure
+    return {
+        'top_3': [],
+        'high_matches': [],
+        'medium_matches': [],
+        'low_matches': []
     }
-    return pd.DataFrame(job_data)
 
-
-def create_job_desc_from_enhanced(version_name, enhanced_content):
-    """Create a job description Series from enhanced content"""
-    if isinstance(enhanced_content, dict):
-        return pd.Series({
-            'File Name': version_name,
-            'JD_Type': "Enhanced",
-            'Skills': enhanced_content.get('skills', ''),
-            'Tools': enhanced_content.get('tools', '')
-        })
-    elif isinstance(enhanced_content, str):
-        # If it's a string, create a basic job description
-        return pd.Series({
-            'File Name': version_name,
-            'JD_Type': "Enhanced",
-            'Skills': enhanced_content,
-            'Tools': ''
-        })
-    else:
-        # Return a default Series if content is invalid
-        return pd.Series({
-            'File Name': version_name,
-            'JD_Type': "Enhanced",
-            'Skills': "Unknown skills",
-            'Tools': "Unknown tools"
-        })
-
-
-def handle_resume_pool_selection(selection, resume_analyzer, jd_type):
-    """Handle different resume pool selection options"""
+def handle_resume_pool_selection(selection, resume_analyzer, jd_type, state_manager):
+    """
+    Handle different resume pool selection options
+    
+    Args:
+        selection (str): Selected pool option
+        resume_analyzer: Resume analyzer instance
+        jd_type (str): Job description type
+        state_manager: State manager instance
+        
+    Returns:
+        DataFrame or None: Resume DataFrame or None if still in selection process
+    """
+    resume_repository = state_manager.get('resume_repository', {})
+    
     if selection == "(Auto Selection)":
         # Auto-select resume pool based on JD type
         default_file_map = {
@@ -227,148 +259,124 @@ def handle_resume_pool_selection(selection, resume_analyzer, jd_type):
             "unknown": "resumes_analysis_output.csv"
         }
         
-        default_file = default_file_map.get(jd_type, "Documents/GitHub/jd-optimizer-app/jd_optim/Exctracted Resumes/resumes_analysis_output.csv")
+        default_file = default_file_map.get(jd_type, "resumes_analysis_output.csv")
         
-        if os.path.exists(default_file):
-            try:
-                resume_df = pd.read_csv(default_file)
-                st.success(f"Loaded default resume pool based on job type ({jd_type})")
-                return resume_df
-            except Exception as e:
-                st.error(f"Error loading default resume file: {e}")
-                return None
-        else:
-            # Try finding similar files
-            possible_files = [f for f in os.listdir() if f.endswith('.csv') and 'resume' in f.lower()]
-            if possible_files:
+        # Search in multiple potential directories
+        search_paths = [
+            os.path.join(os.getcwd(), default_file),
+            os.path.join(os.getcwd(), "Data", "Extracted Resumes", default_file),
+            os.path.join(os.getcwd(), "Data", default_file)
+        ]
+        
+        for path in search_paths:
+            if os.path.exists(path):
                 try:
-                    resume_df = pd.read_csv(possible_files[0])
-                    st.info(f"Using alternative resume file: {possible_files[0]}")
+                    resume_df = pd.read_csv(path)
+                    st.success(f"Loaded default resume pool based on job type ({jd_type})")
                     return resume_df
-                except Exception:
-                    pass
-            
-            st.warning("Default resume pool file not found.")
-            return create_sample_resume_df()
+                except Exception as e:
+                    st.error(f"Error loading default resume file: {e}")
+                    continue
+        
+        # If no file found, use sample data
+        st.warning("Default resume pool file not found in expected locations. Using sample data.")
+        return create_sample_resume_df()
     
     elif selection == "Upload New Resume Pool":
-        # Create UI for uploading new resumes
+       # Create UI for uploading new resumes
         new_pool_name = st.text_input("Enter new pool name:", key="new_pool_name")
         new_pool_files = st.file_uploader(
             "Upload resumes for the new pool", 
-            type=['docx'], 
+            type=['docx', 'csv'], 
             accept_multiple_files=True, 
             key="new_pool_files"
         )
         
         if st.button("Add Resume Pool", key="add_pool"):
             if new_pool_name and new_pool_files:
-                # Process all uploaded resumes
-                pool_df = resume_analyzer.process_resume_pool(new_pool_files)
+                with st.spinner("Processing resume files..."):
+                    # Process all uploaded resumes
+                    pool_df = resume_analyzer.process_resume_pool(new_pool_files)
+                    
+                    if pool_df is not None and not pool_df.empty:
+                        # Display preview of the processed data
+                        st.success(f"Successfully processed {len(pool_df)} resumes")
+                        
+                        with st.expander("Preview Processed Resumes"):
+                            st.dataframe(pool_df[['File Name', 'Skills', 'Tools']].head(5))
+                        
+                        # Update resume repository
+                        pools = resume_repository.get('pools', [])
+                        pools.append({
+                            "pool_name": new_pool_name, 
+                            "data": pool_df.to_dict('records')  # Convert to dict for storage
+                        })
+                        resume_repository['pools'] = pools
+                        state_manager.set('resume_repository', resume_repository)
+                        
+                        st.success(f"Resume pool '{new_pool_name}' added with {len(pool_df)} resumes!")
+                        st.rerun()
+                    else:
+                        st.warning("No valid resumes were processed. Please check your files.")
                 
-                if pool_df is not None and not pool_df.empty:
-                    st.session_state.resume_pools.append({
-                        "pool_name": new_pool_name, 
-                        "data": pool_df
-                    })
-                    st.success(f"Resume pool '{new_pool_name}' added with {len(pool_df)} resumes!")
-                    st.rerun()
-                else:
-                    st.warning("No valid resumes were processed. Please check your files.")
+                # Display helpful tips for file formats
+                with st.expander("File Format Tips"):
+                    st.markdown("""
+                    ### DOCX Files
+                    - Each DOCX file is treated as a single resume
+                    - Make sure your DOCX files contain clear sections for skills, experience, etc.
+                    
+                    ### CSV Files
+                    - CSV files can contain either a single resume or multiple resumes
+                    - For multiple resumes, the CSV should have columns: `File Name`, `Skills`, `Tools`, and optionally `Certifications`
+                    - Column names are case-sensitive, but the system will try to match lowercase alternatives
+                    """)
             else:
                 st.warning("Please provide both a pool name and upload at least one resume file.")
-        return None  # Return None to indicate we're still in the upload phase
-    
-    elif selection in ["General", "Data Engineer", "Java Developer"]:
-        # Load from predefined files
-        generic_map = {
-            "General": "resumes_analysis_output.csv",
-            "Data Engineer": "resumes_analysis_output_JDPrincipalSoftwareEngineer.csv",
-            "Java Developer": "resumes_analysis_outputJDJavaDeveloper.csv"
-        }
-        default_file = generic_map[selection]
         
-        if os.path.exists(default_file):
-            try:
-                resume_df = pd.read_csv(default_file)
-                st.success(f"Loaded {selection} resume pool")
-                return resume_df
-            except Exception as e:
-                st.error(f"Error loading resume file: {e}")
-                return None
-        else:
+        elif selection in ["General", "Data Engineer", "Java Developer"]:
+            # Load from predefined files
+            generic_map = {
+                "General": "resumes_analysis_output.csv",
+                "Data Engineer": "resumes_analysis_output_JDPrincipalSoftwareEngineer.csv",
+                "Java Developer": "resumes_analysis_outputJDJavaDeveloper.csv"
+            }
+            default_file = generic_map[selection]
+            
+            # Search in multiple potential directories
+            search_paths = [
+                os.path.join(os.getcwd(), default_file),
+                os.path.join(os.getcwd(), "Data", "Extracted Resumes", default_file),
+                os.path.join(os.getcwd(), "Data", default_file)
+            ]
+            
+            for path in search_paths:
+                if os.path.exists(path):
+                    try:
+                        resume_df = pd.read_csv(path)
+                        st.success(f"Loaded {selection} resume pool")
+                        return resume_df
+                    except Exception as e:
+                        st.error(f"Error loading resume file: {e}")
+                        continue
+            
+            # If no file found, return none
             st.warning(f"Resume pool file for {selection} not found.")
-            return create_sample_resume_df()
+            return None
+        
+        else:
+            # Check if a user-uploaded pool was selected
+            pools = resume_repository.get('pools', [])
+            for pool in pools:
+                if pool["pool_name"] == selection:
+                    # Convert stored dict back to DataFrame
+                    pool_df = pd.DataFrame(pool["data"])
+                    st.success(f"Loaded custom resume pool '{selection}' with {len(pool_df)} resumes")
+                    return pool_df
     
-    else:
-        # Check if a user-uploaded pool was selected
-        for pool in st.session_state.resume_pools:
-            if pool["pool_name"] == selection:
-                st.success(f"Loaded custom resume pool '{selection}' with {len(pool['data'])} resumes")
-                return pool["data"]
-    
-    # Default fallback
-    return create_sample_resume_df()
-
-
-def create_sample_resume_df():
-    """Create a sample resume DataFrame"""
-    st.info("Using sample resume data")
-    sample_resume_data = {
-        'File Name': ['Resume_1', 'Resume_2', 'Resume_3', 'Resume_4', 'Resume_5'],
-        'Skills': [
-            'Python, Java, Data Analysis, Machine Learning', 
-            'Java, Python, SQL, REST API',
-            'C#, .NET, Azure, Cloud Computing',
-            'Java, Spring, Hibernate, SQL, REST',
-            'Python, ML, AI, Deep Learning, SQL'
-        ],
-        'Tools': [
-            'TensorFlow, Scikit-learn, Docker, Git', 
-            'IntelliJ, Eclipse, Git, Maven',
-            'Visual Studio, Git, Azure DevOps',
-            'Jenkins, Maven, Docker, Kubernetes',
-            'Pandas, NumPy, Jupyter, Keras'
-        ],
-        'Certifications': [
-            'AWS Machine Learning Specialty', 
-            'Oracle Java Professional',
-            'Microsoft Azure Developer',
-            'AWS Developer Associate',
-            'Google Professional Data Engineer'
-        ]
-    }
-    return pd.DataFrame(sample_resume_data)
-
-
-def create_fallback_analysis(resume_df):
-    """Create fallback analysis results with random scores"""
-    all_resumes = []
-    for i in range(len(resume_df)):
-        score = np.random.uniform(0.1, 0.4)
-        all_resumes.append({
-            'Resume ID': resume_df.iloc[i]['File Name'],
-            'Skills': resume_df.iloc[i]['Skills'],
-            'Tools': resume_df.iloc[i]['Tools'],
-            'Certifications': resume_df.iloc[i]['Certifications'],
-            'Score': score
-        })
-    
-    # Sort by score
-    all_resumes.sort(key=lambda x: x['Score'], reverse=True)
-    
-    # Categorize based on score thresholds
-    high_matches = [r for r in all_resumes if r['Score'] >= 0.25]
-    medium_matches = [r for r in all_resumes if 0.2 <= r['Score'] < 0.25]
-    low_matches = [r for r in all_resumes if r['Score'] < 0.2]
-    
-    return {
-        'top_3': all_resumes[:3],
-        'high_matches': high_matches,
-        'medium_matches': medium_matches,
-        'low_matches': low_matches
-    }
-
+    # Default fallback - don't create a sample resume
+    st.warning("No valid resume pool selected.")
+    return None
 
 def display_top_matches(analysis_results):
     """Display top match previews"""
@@ -383,7 +391,6 @@ def display_top_matches(analysis_results):
             """, unsafe_allow_html=True)
     else:
         st.info("No top matches available yet. Click 'Analyze Resumes' to see results.")
-
 
 def display_detailed_resume_analysis(categorized_resumes, job_desc):
     """Display detailed analysis of top resumes"""
@@ -413,12 +420,11 @@ def display_detailed_resume_analysis(categorized_resumes, job_desc):
                     <ul>
                         <li>Technical skills match core requirements</li>
                         <li>Experience with relevant tools and technologies</li>
-                        <li>{resume['Certifications'] if resume['Certifications'] else 'Experience'} enhances qualifications</li>
+                        <li>{resume.get('Certifications', 'Experience')} enhances qualifications</li>
                     </ul>
                     <p><strong>Overall assessment:</strong> Good potential match based on technical qualifications.</p>
                 </div>
                 """, unsafe_allow_html=True)
-
 
 def display_categorized_resumes(categorized_resumes):
     """Display all resumes categorized by match level"""
@@ -453,3 +459,43 @@ def display_categorized_resumes(categorized_resumes):
                     <p style="margin:0">Match: {resume['Score']:.2%}</p>
                 </div>
                 """, unsafe_allow_html=True)
+
+def analyze_uploaded_resume(uploaded_file):
+    """Analyze a user-uploaded resume (.docx) and extract the information"""
+    # Only process .docx files
+    if not uploaded_file.name.endswith(".docx"):
+        raise ValueError(f"Unsupported file format for {uploaded_file.name}. Only .docx files are supported.")
+    
+    # Create a temporary file
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
+        tmp.write(uploaded_file.getvalue())
+        temp_path = tmp.name
+    
+    try:
+        # Extract text from the document
+        doc = Document(temp_path)
+        resume_text = "\n".join([para.text for para in doc.paragraphs])
+        
+        # Extract skills (simplified)
+        skills = extract_skills_from_text(resume_text)
+        tools = extract_tools_from_text(resume_text)
+        
+        # Detect certifications (very simplified)
+        cert_keywords = ['certified', 'certification', 'certificate', 'aws', 'azure', 
+                       'google', 'professional', 'associate', 'expert']
+        has_cert = any(kw in resume_text.lower() for kw in cert_keywords)
+        certification = "Certification detected" if has_cert else "None specified"
+        
+        return {
+            'File Name': uploaded_file.name,
+            'Skills': skills,
+            'Tools': tools,
+            'Certifications': certification
+        }
+    except Exception as e:
+        st.error(f"Error analyzing resume {uploaded_file.name}: {e}")
+        return None
+    finally:
+        # Always remove the temporary file
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
