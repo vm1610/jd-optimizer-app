@@ -195,19 +195,5 @@ def process_notifications(state_manager):
         state_manager.set('notifications', [])
 
 if __name__ == "__main__":
-    # Debugging the directory structure
-    st.write("Current working directory:", os.getcwd())
-    st.write("Contents of the root directory:", os.listdir('.'))
-
-    data_path = 'Data'
-    if os.path.exists(data_path):
-        st.write(f"Contents of '{data_path}' directory:", os.listdir(data_path))
-        jd_path = os.path.join(data_path, 'JDs')
-        if os.path.exists(jd_path):
-            st.write(f"Contents of '{jd_path}' directory:", os.listdir(jd_path))
-        else:
-            st.error(f"'{jd_path}' directory not found.")
-    else:
-        st.error(f"'{data_path}' directory not found.")
     main()
     
