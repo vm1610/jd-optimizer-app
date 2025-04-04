@@ -30,7 +30,7 @@ def save_enhanced_jd(content, filename, format_type):
 
 def get_jd_files():
     """Get a list of job description files from the Data/JDs directory"""
-    jd_directory = os.path.join(os.getcwd(), "Data", "JDs")
+    jd_directory = os.path.join(os.getcwd(), "jd_optim_OOP_implement(vasu)","Data", "JDs")
     if not os.path.exists(jd_directory):
         return []
     
@@ -38,7 +38,7 @@ def get_jd_files():
 
 def get_feedback_files():
     """Get a list of feedback files from the Data/Feedbacks directory"""
-    feedback_directory = os.path.join(os.getcwd(), "Data", "Feedbacks")
+    feedback_directory = os.path.join(os.getcwd(), "jd_optim_OOP_implement(vasu)", "Data", "Feedbacks")
     if not os.path.exists(feedback_directory):
         return []
     

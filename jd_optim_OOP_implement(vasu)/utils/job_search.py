@@ -358,7 +358,7 @@ class JobSearchUtility:
 
 def find_data_files():
     """Find CSV and Excel files in the specified directories that might contain job data"""
-    directories = ['Data/Data Set/Job Listing', 'Data/Data Set/Position Report']
+    directories = ['jd_optim_OOP_implement(vasu)/Data/Data Set/Job Listing', 'jd_optim_OOP_implement(vasu)/Data/Data Set/Position Report']
     
     data_files = []
     position_report_candidates = []

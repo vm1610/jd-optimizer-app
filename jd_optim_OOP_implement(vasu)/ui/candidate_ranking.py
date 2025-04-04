@@ -264,8 +264,8 @@ def handle_resume_pool_selection(selection, resume_analyzer, jd_type, state_mana
         # Search in multiple potential directories
         search_paths = [
             os.path.join(os.getcwd(), default_file),
-            os.path.join(os.getcwd(), "Data", "Extracted Resumes", default_file),
-            os.path.join(os.getcwd(), "Data", default_file)
+            os.path.join(os.getcwd(), "jd_optim_OOP_implement(vasu)", "Data", "Extracted Resumes", default_file),
+            os.path.join(os.getcwd(), "jd_optim_OOP_implement(vasu)", "Data", default_file)
         ]
         
         for path in search_paths:
@@ -346,8 +346,8 @@ def handle_resume_pool_selection(selection, resume_analyzer, jd_type, state_mana
             # Search in multiple potential directories
             search_paths = [
                 os.path.join(os.getcwd(), default_file),
-                os.path.join(os.getcwd(), "Data", "Extracted Resumes", default_file),
-                os.path.join(os.getcwd(), "Data", default_file)
+                os.path.join(os.getcwd(), "jd_optim_OOP_implement(vasu)", "Data", "Extracted Resumes", default_file),
+                os.path.join(os.getcwd(), "jd_optim_OOP_implement(vasu)", "Data", default_file)
             ]
             
             for path in search_paths:
