@@ -196,4 +196,3 @@ def process_notifications(state_manager):
 
 if __name__ == "__main__":
     main()
-    

@@ -165,7 +165,7 @@ def render_jd_optimization_page(services):
                         st.warning("No jobs match your search criteria.")
         
         elif selected_source == "📁 File Selection":
-            jd_directory = os.path.join(os.getcwd(), "Data/JDs")
+            jd_directory = os.path.join(os.getcwd(), "jd_optim_OOP_implement(vasu)/Data/JDs")
             try:
                 # Create directory if it doesn't exist
                 os.makedirs(jd_directory, exist_ok=True)
@@ -275,7 +275,7 @@ def render_jd_optimization_page(services):
                         jd_selection_confirmed = True
                         
                         # Save to JDs directory for future use
-                        jd_dir = os.path.join(os.getcwd(), "Data/JDs")
+                        jd_dir = os.path.join(os.getcwd(), "jd_optim_OOP_implement(vasu)/Data/JDs")
                         os.makedirs(jd_dir, exist_ok=True)
                         save_path = os.path.join(jd_dir, uploaded_file.name)
                         

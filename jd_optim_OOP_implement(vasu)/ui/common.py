@@ -416,7 +416,7 @@ def render_jd_selector(state_manager, services, context=""):
             return False
     
     elif selected_source == "📁 File Selection":
-        jd_directory = os.path.join(os.getcwd(), "Data/JDs")
+        jd_directory = os.path.join(os.getcwd(), "jd_optim_OOP_implement(vasu)/Data/JDs")
         try:
             # Create the directory if it doesn't exist
             os.makedirs(jd_directory, exist_ok=True)
@@ -485,7 +485,7 @@ def render_jd_selector(state_manager, services, context=""):
                 jd_unique_id = f"upload_{uploaded_file.name}"
                 
                 # Create JDs directory if it doesn't exist
-                jd_dir = os.path.join(os.getcwd(), "Data", "JDs")
+                jd_dir = os.path.join(os.getcwd(), "jd_optim_OOP_implement(vasu)", "Data", "JDs")
                 os.makedirs(jd_dir, exist_ok=True)
                 
                 # Save to JDs directory for future use

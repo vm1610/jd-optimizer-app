@@ -18,7 +18,7 @@ class ResumeAnalyzer:
         # Get the base directory (where your app is running)
         self.base_dir = os.getcwd()
         # Define the specific path to the Extracted Resumes folder
-        self.resume_dir = os.path.join(self.base_dir, "Data/Extracted Resumes")
+        self.resume_dir = os.path.join(self.base_dir, "jd_optim_OOP_implement(vasu)/Data/Extracted Resumes")
     
     def compute_similarity(self, job_desc, resume_df):
         """
@@ -159,7 +159,7 @@ class ResumeAnalyzer:
                 resume_files = [f for f in os.listdir(self.resume_dir) if f.endswith('.csv')]
             else:
                 # Fallback to looking in the Data directory
-                data_dir = os.path.join(self.base_dir, "Data")
+                data_dir = os.path.join(self.base_dir, "jd_optim_OOP_implement(vasu)", "Data")
                 st.warning("'Data/Extracted Resumes' directory not found. Looking for resume files in the Data directory.")
                 resume_files = []
                 for root, _, files in os.walk(data_dir):
@@ -184,15 +184,15 @@ class ResumeAnalyzer:
                 
                 for file_name in default_file_list:
                     # Try in Data/Extracted Resumes
-                    potential_path = os.path.join(self.base_dir, "Data", "Extracted Resumes", file_name)
+                    potential_path = os.path.join(self.base_dir, "jd_optim_OOP_implement(vasu)", "Data", "Extracted Resumes", file_name)
                     if os.path.exists(potential_path):
                         resume_files = [potential_path]
-                        self.resume_dir = os.path.join(self.base_dir, "Data", "Extracted Resumes")
+                        self.resume_dir = os.path.join(self.base_dir, "jd_optim_OOP_implement(vasu)", "Data", "Extracted Resumes")
                         st.info(f"Using resume file for {jd_type}: {file_name}")
                         break
                     
                     # Try in base/Data directory recursively
-                    for root, _, files in os.walk(os.path.join(self.base_dir, "Data")):
+                    for root, _, files in os.walk(os.path.join(self.base_dir, "jd_optim_OOP_implement(vasu)","Data")):
                         if file_name in files:
                             resume_files = [os.path.join(root, file_name)]
                             self.resume_dir = root
