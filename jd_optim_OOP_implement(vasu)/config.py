@@ -240,12 +240,22 @@ custom_css = """
         color: #FFFFFF;
     }
     
-    /* Text Area Improvements - Final Enhanced Version */
+    /* Text Area Improvements - Final Enhanced Version and Read-only areas */
     .stTextArea > div > div > textarea {
         background-color: #2D3748;
-        color: #FFFFFF;
+        color: #FFFFFF !important;
         border: 1px solid #4A5568;
         font-family: monospace;
+    }
+    
+    /* Specifically target disabled/read-only text areas */
+    .stTextArea > div > div > textarea:disabled,
+    .stTextArea > div > div > textarea[readonly] {
+        background-color: #2D3748 !important;
+        color: #FFFFFF !important;
+        opacity: 1 !important; /* Prevent dimming on disabled elements */
+        -webkit-text-fill-color: #FFFFFF !important; /* Safari fix */
+        font-weight: 500 !important; /* Make slightly bolder */
     }
     
     /* Add more contrast to radio buttons and checkboxes */
@@ -282,10 +292,24 @@ custom_css = """
         color: #FFFFFF !important;
     }
 
-    /* Focus on enhancing the final enhanced version block */
+    /* Focus on enhancing the final enhanced version block and all read-only text areas */
     [data-testid="stTextArea"] textarea {
         color: #FFFFFF !important;
         font-size: 1rem !important;
+    }
+
+    /* Cross-platform fixes for text visibility */
+    [data-testid="stTextArea"] textarea:disabled,
+    [data-testid="stTextArea"] textarea[readonly],
+    textarea.st-ce,
+    textarea.st-dk {
+        background-color: #2D3748 !important;
+        color: #FFFFFF !important;
+        opacity: 1 !important;
+        -webkit-text-fill-color: #FFFFFF !important; /* Fix for Safari/Mac */
+        -moz-osx-font-smoothing: grayscale !important; /* Improves text rendering on Mac */
+        -webkit-font-smoothing: antialiased !important; /* Improves text rendering on Mac */
+        text-shadow: 0 0 0 #FFFFFF !important; /* Alternative rendering fix */
     }
 </style>
 """
