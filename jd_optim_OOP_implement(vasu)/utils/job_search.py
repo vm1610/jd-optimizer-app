@@ -484,51 +484,6 @@ def render_job_search_section(state_manager):
         
         return False
     
-    # If we have already initialized job search in another tab
-    elif not job_search.is_initialized and job_search_initialized:
-        # Try to re-initialize with dummy data for demo purposes
-        job_search.position_report_df = pd.DataFrame({
-            'Parent Id': ['REF1001', 'REF1002', 'REF1003', 'REF1004', 'REF1005'],
-            'Job Description': [
-                'Software Engineer with 5+ years experience in Python and Java...',
-                'Data Scientist with strong background in machine learning...',
-                'DevOps Engineer with expertise in AWS and CI/CD pipelines...',
-                'Frontend Developer with React.js experience...',
-                'Backend Developer with Node.js and MongoDB experience...'
-            ]
-        })
-        
-        job_search.job_listings_df = pd.DataFrame({
-            'Job Id': ['1001', '1002', '1003', '1004', '1005'],
-            'Refrence Id': ['REF1001', 'REF1002', 'REF1003', 'REF1004', 'REF1005'],
-            'Job Name': [
-                'Software Engineer', 
-                'Data Scientist', 
-                'DevOps Engineer', 
-                'Frontend Developer',
-                'Backend Developer'
-            ],
-            'Client': [
-                'TechCorp Inc.', 
-                'DataAnalytics Ltd.', 
-                'CloudSystems Inc.', 
-                'WebApp Solutions',
-                'ServerTech Inc.'
-            ],
-            'Job Status': [
-                'Active',
-                'Active',
-                'Closed',
-                'On Hold',
-                'Active'
-            ]
-        })
-        
-        job_search.is_initialized = True
-        state_manager.set('job_search_utility', job_search)
-        display_success_message("Demo job search data initialized!")
-        st.rerun()
-        return True
     
     # Search section (only shown after initialization)
     else:
