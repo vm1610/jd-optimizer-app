@@ -1,4 +1,4 @@
-    jd_optim/
+jd_optim/
 │
 ├── app.py                          # Main application entrypoint
 ├── config.py                       # Configuration and settings

@@ -14,7 +14,7 @@ custom_css = """
 <style>
     /* Base Text and Background Colors */
     .main .block-container {
-        color: #E2E8F0;
+        color: #FFFFFF;
         background-color: #1A202C;
     }
     
@@ -23,7 +23,7 @@ custom_css = """
         font-size: 26px;
         font-weight: bold;
         margin-bottom: 15px;
-        color: #90CDF4;
+        color: #FFFFFF;
     }
     
     .section-header {
@@ -31,7 +31,7 @@ custom_css = """
         font-weight: bold;
         margin-top: 25px;
         margin-bottom: 10px;
-        color: #90CDF4;
+        color: #FFFFFF;
         padding: 5px 0;
         border-bottom: 2px solid #4299E1;
     }
@@ -41,7 +41,7 @@ custom_css = """
         font-weight: bold;
         margin-top: 15px;
         margin-bottom: 5px;
-        color: #63B3ED;
+        color: #FFFFFF;
     }
     
     /* Message Boxes */
@@ -51,7 +51,7 @@ custom_css = """
         padding: 12px;
         margin: 12px 0;
         border-radius: 4px;
-        color: #E2E8F0;
+        color: #FFFFFF;
     }
     
     .success-box {
@@ -60,7 +60,7 @@ custom_css = """
         padding: 12px;
         margin: 12px 0;
         border-radius: 4px;
-        color: #C6F6D5;
+        color: #FFFFFF;
     }
     
     .warning-box {
@@ -69,13 +69,13 @@ custom_css = """
         padding: 12px;
         margin: 12px 0;
         border-radius: 4px;
-        color: #FEFCBF;
+        color: #FFFFFF;
     }
     
     /* Content Cards */
     .tab-header {
         font-weight: bold;
-        color: #63B3ED;
+        color: #FFFFFF;
     }
     
     .metric-card {
@@ -84,7 +84,7 @@ custom_css = """
         padding: 12px;
         margin: 8px 0;
         box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        color: #E2E8F0;
+        color: #FFFFFF;
         border: 1px solid #4A5568;
     }
     
@@ -96,7 +96,7 @@ custom_css = """
         margin: 8px 0;
         border-radius: 4px;
         box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-        color: #C6F6D5;
+        color: #FFFFFF;
     }
     
     .category-medium {
@@ -106,7 +106,7 @@ custom_css = """
         margin: 8px 0;
         border-radius: 4px;
         box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-        color: #FEFCBF;
+        color: #FFFFFF;
     }
     
     .category-low {
@@ -116,26 +116,27 @@ custom_css = """
         margin: 8px 0;
         border-radius: 4px;
         box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-        color: #FED7D7;
+        color: #FFFFFF;
     }
     
     /* Input Fields and Selectors */
     .stTextInput > div > div > input {
-        color: #E2E8F0;
+        color: #FFFFFF;
         border: 1px solid #4A5568;
         background-color: #2D3748;
     }
     
     .stSelectbox > div > div > div {
-        color: #E2E8F0;
+        color: #FFFFFF;
         border: 1px solid #4A5568;
         background-color: #2D3748;
     }
     
     .stTextArea > div > div > textarea {
-        color: #E2E8F0;
+        color: #FFFFFF;
         border: 1px solid #4A5568;
         background-color: #2D3748;
+        font-family: monospace;
     }
     
     /* Buttons */
@@ -148,7 +149,7 @@ custom_css = """
     
     .stButton > button[kind="secondary"] {
         background-color: #2D3748;
-        color: #90CDF4;
+        color: #FFFFFF;
         border: 1px solid #4299E1;
     }
     
@@ -168,7 +169,7 @@ custom_css = """
         border-radius: 5px;
         margin-bottom: 8px;
         cursor: grab;
-        color: #E2E8F0;
+        color: #FFFFFF;
     }
     
     .drag-item:hover {
@@ -183,27 +184,27 @@ custom_css = """
         padding: 15px;
         margin: 12px 0;
         border-radius: 4px;
-        color: #E2E8F0;
+        color: #FFFFFF;
     }
     
     /* Tab Styling */
     button[data-baseweb="tab"] {
         background-color: #2D3748;
-        color: #90CDF4;
+        color: #FFFFFF;
         border-bottom: 2px solid #4299E1;
         font-weight: 500;
     }
     
     button[data-baseweb="tab"][aria-selected="true"] {
         background-color: #4A5568;
-        color: #90CDF4;
+        color: #FFFFFF;
         border-bottom: 2px solid #63B3ED;
         font-weight: 600;
     }
     
     /* Better contrast for DataFrames and tables */
     .stDataFrame {
-        color: #E2E8F0;
+        color: #FFFFFF;
     }
     
     .stDataFrame [data-testid="stTable"] {
@@ -213,19 +214,19 @@ custom_css = """
     
     .stDataFrame th {
         background-color: #4A5568;
-        color: #90CDF4;
+        color: #FFFFFF;
         font-weight: 600;
     }
     
     .stDataFrame td {
-        color: #E2E8F0;
+        color: #FFFFFF;
         border-bottom: 1px solid #4A5568;
     }
     
     /* Expander styling */
     .streamlit-expanderHeader {
         font-weight: 600;
-        color: #90CDF4;
+        color: #FFFFFF;
         background-color: #2D3748;
         border-radius: 4px;
     }
@@ -236,34 +237,55 @@ custom_css = """
         border-top: none;
         border-radius: 0 0 4px 4px;
         padding: 10px;
-        color: #E2E8F0;
+        color: #FFFFFF;
     }
     
-    /* Text Area Improvements */
+    /* Text Area Improvements - Final Enhanced Version */
     .stTextArea > div > div > textarea {
         background-color: #2D3748;
-        color: #E2E8F0;
+        color: #FFFFFF;
         border: 1px solid #4A5568;
         font-family: monospace;
     }
     
     /* Add more contrast to radio buttons and checkboxes */
     .stRadio > div {
-        color: #E2E8F0;
+        color: #FFFFFF;
     }
     
     .stCheckbox > div > label {
-        color: #E2E8F0;
+        color: #FFFFFF;
     }
     
     /* Make tabs more visible */
     div[data-testid="stVerticalBlock"] div[data-testid="stHorizontalBlock"] button {
         background-color: #2D3748;
-        color: #90CDF4;
+        color: #FFFFFF;
     }
     
     div[data-testid="stVerticalBlock"] div[data-testid="stHorizontalBlock"] button:hover {
         background-color: #4A5568;
+    }
+
+    /* Additional style for better contrast of text inputs */
+    input, textarea, .stLinkButton, .stMarkdown, p, ol, ul, dl {
+        color: #FFFFFF !important;
+    }
+
+    /* Additional styles for alert messages */
+    .stAlert > div {
+        color: #FFFFFF;
+    }
+
+    /* Ensure headers are clearly visible */
+    h1, h2, h3, h4, h5, h6 {
+        color: #FFFFFF !important;
+    }
+
+    /* Focus on enhancing the final enhanced version block */
+    [data-testid="stTextArea"] textarea {
+        color: #FFFFFF !important;
+        font-size: 1rem !important;
     }
 </style>
 """
