@@ -673,7 +673,7 @@ def render_jd_optimization_page(services):
                     with col2:
                         final_comparison_df = create_comparison_dataframe({'Original': original_scores, 'Final': final_scores})
                         st.dataframe(
-                            final_comparison_df,  # FIXED: Variable name
+                            final_comparison_df,
                             height=400,
                             use_container_width=True,
                             hide_index=True,
@@ -703,6 +703,63 @@ def render_jd_optimization_page(services):
                             display_success_message(f"Saved as {docx_filename}")
                             if logger:
                                 logger.log_download("docx", docx_filename)
+                    
+                    # Select JD for Candidate Ranking
+                    st.markdown("---")
+                    display_subsection_header("🎯 Use for Candidate Ranking")
+                    
+                    # Create options for different JD versions
+                    jd_options = [
+                        {"label": "Final Enhanced Version", "value": "final", "description": "The final enhanced version with all feedback incorporated"},
+                        {"label": f"Enhanced Version {selected_index + 1}", "value": f"enhanced_{selected_index}", "description": f"Enhanced version {selected_index + 1} without final feedback"},
+                        {"label": "Original Version", "value": "original", "description": "The original unenhanced job description"}
+                    ]
+                    
+                    st.markdown("""
+                    <div style="background-color: #2D3748; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                        <h4 style="margin-top: 0; color: #90CDF4;">Select which version to use for candidate ranking</h4>
+                        <p>Choose which job description version you want to use when ranking candidates.</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Display radio buttons for JD selection
+                    selected_jd_version = st.radio(
+                        "Job Description Version for Candidate Ranking:",
+                        options=[option["label"] for option in jd_options],
+                        index=0,  # Default to final version
+                        key="jd_version_for_ranking",
+                        help="This version will be used when you proceed to candidate ranking"
+                    )
+                    
+                    # Find the selected option
+                    selected_option = next((option for option in jd_options if option["label"] == selected_jd_version), jd_options[0])
+                    
+                    # When the user clicks the button to proceed to candidate ranking
+                    if st.button("🎯 Continue to Candidate Ranking", type="primary", key="goto_ranking_btn"):
+                        # Set the selected JD version based on user choice
+                        if selected_option["value"] == "final":
+                            state_manager.update_jd_repository('for_candidate_ranking', {
+                                'content': final_version,
+                                'source': f"Final Enhanced Version of {jd_source_name}",
+                                'version_type': 'final'
+                            }, source_tab="jd_optimization")
+                        elif selected_option["value"].startswith("enhanced_"):
+                            version_idx = int(selected_option["value"].split("_")[1])
+                            state_manager.update_jd_repository('for_candidate_ranking', {
+                                'content': enhanced_versions[version_idx],
+                                'source': f"Enhanced Version {version_idx + 1} of {jd_source_name}",
+                                'version_type': 'enhanced'
+                            }, source_tab="jd_optimization")
+                        else:  # original
+                            state_manager.update_jd_repository('for_candidate_ranking', {
+                                'content': jd_content,
+                                'source': f"Original Version of {jd_source_name}",
+                                'version_type': 'original'
+                            }, source_tab="jd_optimization")
+                        
+                        # Switch to Candidate Ranking tab
+                        state_manager.set('active_tab', "Candidate Ranking")
+                        st.rerun()
         else:
             # Show message if no JD is selected yet or selection not confirmed
             if selected_source:
