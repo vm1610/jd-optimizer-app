@@ -23,7 +23,7 @@ custom_css = """
         font-size: 26px;
         font-weight: bold;
         margin-bottom: 15px;
-        color: #FFFFFF;
+        color: #f5f5dc;
     }
     
     .section-header {
@@ -31,7 +31,7 @@ custom_css = """
         font-weight: bold;
         margin-top: 25px;
         margin-bottom: 10px;
-        color: #FFFFFF;
+        color: #f5f5dc;
         padding: 5px 0;
         border-bottom: 2px solid #4299E1;
     }
@@ -41,7 +41,7 @@ custom_css = """
         font-weight: bold;
         margin-top: 15px;
         margin-bottom: 5px;
-        color: #FFFFFF;
+        color: #f5f5dc;
     }
     
     /* Message Boxes */
@@ -260,7 +260,7 @@ custom_css = """
     
     /* Add more contrast to radio buttons and checkboxes */
     .stRadio > div {
-        color: #FFFFFF;
+        color: #FFFFF;
     }
     
     .stCheckbox > div > label {
@@ -270,7 +270,7 @@ custom_css = """
     /* Make tabs more visible */
     div[data-testid="stVerticalBlock"] div[data-testid="stHorizontalBlock"] button {
         background-color: #2D3748;
-        color: #FFFFFF;
+        color: #f5f5dc;
     }
     
     div[data-testid="stVerticalBlock"] div[data-testid="stHorizontalBlock"] button:hover {
@@ -279,17 +279,17 @@ custom_css = """
 
     /* Additional style for better contrast of text inputs */
     input, textarea, .stLinkButton, .stMarkdown, p, ol, ul, dl {
-        color: #FFFFFF !important;
+        color:#f5f5dc !important;
     }
 
     /* Additional styles for alert messages */
     .stAlert > div {
-        color: #FFFFFF;
+        color: #f5f5dc;
     }
 
     /* Ensure headers are clearly visible */
     h1, h2, h3, h4, h5, h6 {
-        color: #FFFFFF !important;
+        color:#f5f5dc !important;
     }
 
     /* Focus on enhancing the final enhanced version block and all read-only text areas */
@@ -304,7 +304,7 @@ custom_css = """
     textarea.st-ce,
     textarea.st-dk {
         background-color: #2D3748 !important;
-        color: #FFFFFF !important;
+        color: #e0e0e0 !important;
         opacity: 1 !important;
         -webkit-text-fill-color: #FFFFFF !important; /* Fix for Safari/Mac */
         -moz-osx-font-smoothing: grayscale !important; /* Improves text rendering on Mac */
