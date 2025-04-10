@@ -10,6 +10,8 @@ from ui.common import (
     render_jd_selector, display_jd_comparison
 )
 from utils.file_utils import save_enhanced_jd
+from utils.jd_summary import generate_version_summary
+
 
 def render_client_feedback_page(services):
     """
@@ -358,7 +360,7 @@ def render_client_feedback_page(services):
         display_section_header("Results")
         
         # Use the comparison component
-        display_jd_comparison(jd_content, client_enhanced_jd, services, "client_feedback")
+        display_jd_comparison_with_summary(jd_content, client_enhanced_jd, services, "client_feedback")
         
         # Select JD for Candidate Ranking
         st.markdown("---")
@@ -503,3 +505,84 @@ def process_csv_content(csv_content, column_type="feedback"):
         return combined_content, f"Could not identify a specific {column_type} column. Using combined text from CSV."
     except Exception as e:
         return csv_content, f"Error processing CSV structure: {str(e)}. Using raw CSV content."
+
+# Fixed version of display_jd_comparison_with_summary function for client_feedback.py
+
+def display_jd_comparison_with_summary(original_jd, enhanced_jd, services, context=""):
+    """
+    Display a comparison between original and enhanced JD with summary
+    """
+    analyzer = services.get('analyzer')
+    agent = services.get('agent')
+    
+    # Create main columns for JD comparison
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        display_subsection_header("Original Job Description")
+        st.text_area(
+            "Original Content",
+            original_jd,
+            height=300,
+            disabled=True,
+            key=f"{context}_original_jd_display"
+        )
+    
+    with col2:
+        display_subsection_header("Enhanced Job Description")
+        st.text_area(
+            "Enhanced Content",
+            enhanced_jd,
+            height=300,
+            key=f"{context}_enhanced_jd_display"
+        )
+    
+    # Add the summary section
+    st.markdown("### Changes Summary")
+    
+    with st.spinner("Generating summary..."):
+        # Generate summary using the agent
+        if agent:
+            summary = agent.generate_version_summary(original_jd, enhanced_jd)
+            
+            st.markdown(
+                f"""
+                <div style="background-color: #2D3748; padding: 15px; border-radius: 5px; border-left: 4px solid #4299E1; margin-bottom: 20px;">
+                    <div style="color: #FFFFFF; font-size: 1em;">
+                        {summary}
+                    </div>
+                </div>
+                """, 
+                unsafe_allow_html=True
+            )
+        else:
+            st.error("AI agent is not available. Cannot generate summary.")
+    
+    # Compare original vs enhanced with skill analysis
+    if original_jd and enhanced_jd and analyzer:
+        display_section_header("Skill Analysis")
+        
+        # Analyze both versions
+        original_scores = analyzer.analyze_text(original_jd)
+        enhanced_scores = analyzer.analyze_text(enhanced_jd)
+        
+        comp_col1, comp_col2 = st.columns([1, 1])
+        
+        with comp_col1:
+            display_subsection_header("Skill Coverage Comparison")
+            from utils.visualization import create_multi_radar_chart
+            radar_chart = create_multi_radar_chart({'Original': original_scores, 'Enhanced': enhanced_scores})
+            st.plotly_chart(radar_chart, use_container_width=True, key=f"{context}_radar")
+        
+        with comp_col2:
+            display_subsection_header("Detailed Analysis")
+            from utils.visualization import create_comparison_dataframe
+            comparison_df = create_comparison_dataframe({'Original': original_scores, 'Enhanced': enhanced_scores})
+            st.dataframe(
+                comparison_df,
+                height=400,
+                use_container_width=True,
+                hide_index=True,
+                key=f"{context}_comparison"
+            )
+            st.caption("Percentages indicate keyword coverage in each category")

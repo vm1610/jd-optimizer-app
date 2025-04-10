@@ -36,34 +36,11 @@ def render_jd_creation_page(services):
     with creation_tabs[0]:
         display_subsection_header("Create a New Job Description")
         
-        # Job title and department
-        col1, col2 = st.columns(2)
-        with col1:
-            job_title = st.text_input("Job Title:", 
+
+        job_title = st.text_input("Job Title:", 
                 placeholder="e.g., Senior Software Engineer",
                 help="Enter the title for this position")
-        
-        with col2:
-            department = st.text_input("Department:", 
-                placeholder="e.g., Engineering",
-                help="Enter the department for this position")
-        
-        # Job location and type
-        col1, col2 = st.columns(2)
-        with col1:
-            job_location = st.text_input("Location:", 
-                placeholder="e.g., San Francisco, CA or Remote",
-                help="Enter the job location")
-        
-        with col2:
-            job_type = st.selectbox("Employment Type:", 
-                options=["Full-time", "Part-time", "Contract", "Freelance", "Internship"],
-                help="Select the employment type")
-        
-        # Experience level
-        experience_level = st.selectbox("Experience Level:",
-            options=["Entry Level", "Associate", "Mid-Level", "Senior", "Principal", "Director"],
-            help="Select the experience level required for this position")
+
         
         # Job description sections
         st.markdown("### Job Description Content")

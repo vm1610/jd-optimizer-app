@@ -154,6 +154,7 @@ class JobSearchUtility:
     def get_dropdown_options(self):
         """
         Get formatted options for the dropdown with status indicators
+        Only includes jobs that have corresponding job descriptions
         
         Returns:
             list: List of formatted dropdown options
@@ -169,6 +170,36 @@ class JobSearchUtility:
             ref_id = str(row.get('Refrence Id', '')) if 'Refrence Id' in row else ''
             job_name = str(row.get('Job Name', '')) if 'Job Name' in row else ''
             client = str(row.get('Client', '')) if 'Client' in row else ''
+            
+            # Check if this job has a corresponding description
+            # First check if Parent Id exists in position_report_df
+            has_description = False
+            
+            if 'Parent Id' in self.position_report_df.columns:
+                # Try match with Reference Id
+                if ref_id and any(self.position_report_df['Parent Id'] == ref_id):
+                    has_description = True
+                # Try match with Job Id
+                elif any(self.position_report_df['Parent Id'] == job_id):
+                    has_description = True
+                # Try contains match
+                elif any(self.position_report_df['Parent Id'].str.contains(job_id, na=False)):
+                    has_description = True
+            
+            # Check for description column directly
+            elif 'Job Description' in self.position_report_df.columns:
+                # Check if any non-empty descriptions exist
+                has_description = self.position_report_df['Job Description'].notna().any()
+            
+            # Check for ATS Position ID match
+            if not has_description and 'ATS Position ID' in self.position_report_df.columns and 'ATS Position ID' in row:
+                ats_id = str(row['ATS Position ID'])
+                if any(self.position_report_df['ATS Position ID'] == ats_id):
+                    has_description = True
+            
+            # If we can't confirm it has a description, skip this job
+            if not has_description:
+                continue
             
             # Get job status if available and add appropriate emoji
             status_emoji = ""
@@ -233,13 +264,14 @@ class JobSearchUtility:
     
     def find_job_description(self, selected_option):
         """
-        Find the job description for the selected option
+        Find the job description for the selected option.
+        Only returns job descriptions that are actually found in the data.
         
         Args:
             selected_option (str): The selected dropdown option
             
         Returns:
-            tuple: (job_description, job_details_dict)
+            tuple: (job_description, job_details_dict) or (None, details_dict) if no description found
         """
         if not self.is_initialized:
             return None, None
@@ -286,6 +318,21 @@ class JobSearchUtility:
         # Try all matching strategies
         parent_match = None
         
+        # Make sure position_report_df has 'Parent Id' column before trying to match
+        if 'Parent Id' not in self.position_report_df.columns:
+            # Create job details with available information but NO job description
+            job_details = {
+                'Job Id': job_id,
+                'Reference Id': reference_id,
+                'Job Name': extracted_ids.get('job_name', ''),
+                'Client': extracted_ids.get('client', ''),
+                'Status': status_display,
+                'ATS Position ID': ats_position_id or 'N/A',
+                'Job Description': None  # No job description
+            }
+            
+            return None, job_details
+        
         # Strategy 1: Try match between Reference Id and Parent Id (PRIMARY STRATEGY)
         if reference_id and 'Parent Id' in self.position_report_df.columns:
             parent_match = self.position_report_df[self.position_report_df['Parent Id'] == reference_id]
@@ -297,49 +344,45 @@ class JobSearchUtility:
                 parent_match = self.position_report_df[self.position_report_df['ATS Position ID'] == ats_position_id]
             
             # Strategy 3: Try direct match between Job Id and Parent Id
-            if parent_match is None or parent_match.empty:
+            if (parent_match is None or parent_match.empty) and 'Parent Id' in self.position_report_df.columns:
                 parent_match = self.position_report_df[self.position_report_df['Parent Id'] == job_id]
             
             # Strategy 4: Try partial match where Parent Id contains Reference Id
-            if (parent_match is None or parent_match.empty) and reference_id:
+            if (parent_match is None or parent_match.empty) and reference_id and 'Parent Id' in self.position_report_df.columns:
                 parent_match = self.position_report_df[self.position_report_df['Parent Id'].str.contains(reference_id, na=False)]
             
             # Strategy 5: Try partial match where Parent Id contains Job Id
-            if parent_match is None or parent_match.empty:
+            if (parent_match is None or parent_match.empty) and 'Parent Id' in self.position_report_df.columns:
                 parent_match = self.position_report_df[self.position_report_df['Parent Id'].str.contains(job_id, na=False)]
         
+        # If no match found, return None for job description but still return the details
         if parent_match is None or parent_match.empty:
-            return None, None
+            job_details = {
+                'Job Id': job_id,
+                'Reference Id': reference_id,
+                'Job Name': extracted_ids.get('job_name', ''),
+                'Client': extracted_ids.get('client', ''),
+                'Status': status_display,
+                'Parent Id': 'N/A',
+                'ATS Position ID': ats_position_id or 'N/A',
+                'Job Description': None  # No job description
+            }
+            
+            return None, job_details
         
         # Get the job description
-        job_description = parent_match['Job Description'].iloc[0] if 'Job Description' in parent_match.columns else None
+        job_description = None
+        if 'Job Description' in parent_match.columns:
+            job_description = parent_match['Job Description'].iloc[0]
+        else:
+            # If there's no Job Description column, try to find an alternative
+            content_columns = [col for col in parent_match.columns if 'description' in col.lower()]
+            if content_columns:
+                job_description = parent_match[content_columns[0]].iloc[0]
         
-        # Use dummy job description if not found (for demo purposes)
-        if not job_description:
-            job_description = f"""
-            Job Description for {extracted_ids.get('job_name', 'Position')}
-            
-            Company: {extracted_ids.get('client', 'Our Client')}
-            Status: {status_display}
-            
-            Responsibilities:
-            - Develop high-quality software design and architecture
-            - Identify, prioritize and execute tasks in the software development lifecycle
-            - Develop tools and applications by producing clean, efficient code
-            - Automate tasks through appropriate tools and scripting
-            - Review and debug code
-            - Perform validation and verification testing
-            - Collaborate with internal teams and vendors to fix and improve products
-            - Document development phases and monitor systems
-            
-            Requirements:
-            - Proven experience as a Software Developer
-            - Experience with development tools and languages
-            - Problem-solving abilities and critical thinking
-            - Excellent communication skills
-            - Teamwork skills with a quality-oriented mindset
-            - BS/MS degree in Computer Science, Engineering or a related field
-            """
+        # Handle None or NaN job description
+        if pd.isna(job_description) or job_description is None:
+            job_description = None
         
         # Create a dictionary with all relevant job details
         job_details = {
@@ -357,34 +400,55 @@ class JobSearchUtility:
 
 
 def find_data_files():
-    """Find CSV and Excel files in the specified directories that might contain job data"""
-    directories = ['jd_optim_OOP_implement(vasu)/Data/Data Set/Job Listing', 'jd_optim_OOP_implement(vasu)/Data/Data Set/Position Report']
+    """
+    Find CSV and Excel files in the specified directories that might contain job data.
+    Separates files properly between position reports and job listings based on directory.
     
-    data_files = []
+    Returns:
+        tuple: (position_report_candidates, job_listing_candidates)
+    """
+    # Define specific directories
+    position_report_dir = 'jd_optim_OOP_implement(vasu)/Data/Data Set/Position Report'
+    job_listing_dir = 'jd_optim_OOP_implement(vasu)/Data/Data Set/Job Listing'
+    
     position_report_candidates = []
     job_listing_candidates = []
     
-    for directory in directories:
-        # Check if directory exists before trying to list its contents
-        if not os.path.exists(directory):
-            continue
-            
-        for f in os.listdir(directory):
+    # Process Position Report directory
+    if os.path.exists(position_report_dir):
+        for f in os.listdir(position_report_dir):
             if f.endswith(('.csv', '.xlsx', '.xls')):
-                file_path = os.path.join(directory, f)
-                data_files.append(file_path)
+                file_path = os.path.join(position_report_dir, f)
+                position_report_candidates.append(file_path)
+    
+    # Process Job Listing directory
+    if os.path.exists(job_listing_dir):
+        for f in os.listdir(job_listing_dir):
+            if f.endswith(('.csv', '.xlsx', '.xls')):
+                file_path = os.path.join(job_listing_dir, f)
+                job_listing_candidates.append(file_path)
+    
+    # If we still don't have any candidates, try a broader search
+    if not position_report_candidates and not job_listing_candidates:
+        general_data_dirs = [
+            'jd_optim_OOP_implement(vasu)/Data',
+            'jd_optim_OOP_implement(vasu)/Data/Data Set',
+            'Data',
+            'Data/Data Set'
+        ]
+        
+        for directory in general_data_dirs:
+            if not os.path.exists(directory):
+                continue
                 
-                if 'position' in f.lower() or 'report' in f.lower():
-                    position_report_candidates.append(file_path)
-                if 'job' in f.lower() or 'listing' in f.lower():
-                    job_listing_candidates.append(file_path)
-    
-    # If no specific matches, return all files
-    if not position_report_candidates:
-        position_report_candidates = data_files
-    
-    if not job_listing_candidates:
-        job_listing_candidates = data_files
+            for f in os.listdir(directory):
+                if f.endswith(('.csv', '.xlsx', '.xls')):
+                    file_path = os.path.join(directory, f)
+                    # Classify based on filename
+                    if 'position' in f.lower() or 'report' in f.lower():
+                        position_report_candidates.append(file_path)
+                    elif 'job' in f.lower() or 'listing' in f.lower():
+                        job_listing_candidates.append(file_path)
     
     return position_report_candidates, job_listing_candidates
 

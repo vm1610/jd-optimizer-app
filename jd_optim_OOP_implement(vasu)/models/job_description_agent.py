@@ -189,3 +189,49 @@ class JobDescriptionAgent:
             print(f"Error generating final description: {e}")
             
         return selected_description + f"\n\n[Error generating final version: Unable to process feedback]"
+
+    def generate_version_summary(self, original_description, enhanced_description):
+        """
+        Generate a summary of changes between the original and enhanced job descriptions
+        
+        Args:
+            original_description (str): The original job description
+            enhanced_description (str): The enhanced job description
+            
+        Returns:
+            str: A paragraph summarizing the key changes
+        """
+        # If client is not initialized properly, return a simple summary
+        if not self.client:
+            return "Summary generation unavailable - AI service connection not available."
+                
+        # Construct prompt for the summary
+        prompt = (
+            "You are an expert at analyzing job descriptions. Given two versions of a job description "
+            "(original and enhanced), provide a brief paragraph summary of the key changes made.\n\n"
+            "Focus on important differences such as:\n"
+            "- Word count changes (if significant)\n"
+            "- Added or removed skills/requirements\n"
+            "- New sections or reorganization\n"
+            "- Tone or clarity improvements\n"
+            "- Any other notable changes\n\n"
+            
+            "Your summary should be a single paragraph of 3-5 sentences maximum, focusing only on the most "
+            "significant changes. Be specific about what was added or changed.\n\n"
+            
+            f"### Original Job Description:\n{original_description}\n\n"
+            f"### Enhanced Job Description:\n{enhanced_description}\n\n"
+            
+            "### Summary of Changes (3-5 sentences):\n"
+        )
+        
+        model_response = self._invoke_bedrock_model(prompt)
+        
+        try:
+            if model_response and "content" in model_response and isinstance(model_response["content"], list):
+                summary = model_response["content"][0]["text"].strip()
+                return summary
+        except Exception as e:
+            print(f"Error generating summary: {str(e)}")
+            
+        return "Unable to generate summary of changes."

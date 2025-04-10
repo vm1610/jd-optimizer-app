@@ -49,7 +49,7 @@ class JobDescriptionAgent:
             return None
             
     def generate_initial_descriptions(self, job_description):
-        """Generate three distinct enhanced versions of a job description with change summaries."""
+        """Generate detailed and structured job descriptions based on the given job description."""
         # If client is not initialized properly, return dummy versions
         if not self.client:
             return [
@@ -59,26 +59,14 @@ class JobDescriptionAgent:
             ]
         
         prompt = (
-            "You are a job description specialist with expertise in creating compelling, differentiated job descriptions. "
-            "Your task is to transform the provided job description into THREE distinctly different enhanced versions, "
-            "each with a unique focus and approach while maintaining accuracy and core requirements.\n\n"
+            "You are a job description specialist. Your task is to refine and expand upon the provided job description, "
+            "creating three distinct versions that are structured, detailed, and aligned with industry best practices.\n\n"
             
-            "### Each version must have a DIFFERENT FOCUS:\n"
-            "- VERSION 1: Focus on TECHNICAL EXCELLENCE and DOMAIN EXPERTISE. Emphasize technical skills, tools, "
-            "methodologies, and domain knowledge. Use precise technical language and highlight opportunities for technical growth.\n\n"
-            
-            "- VERSION 2: Focus on LEADERSHIP & IMPACT. Emphasize business impact, strategic thinking, collaboration, "
-            "and leadership qualities. Highlight how this role influences outcomes and drives organizational success.\n\n"
-            
-            "- VERSION 3: Focus on INNOVATION & GROWTH. Emphasize creativity, problem-solving, continuous learning, "
-            "and professional development. Highlight how this role contributes to innovation and transformation.\n\n"
-            
-            "### Guidelines for all versions:\n"
-            "- Do NOT make assumptions or introduce inaccuracies about the role or requirements.\n"
+            "### Guidelines:\n"
+            "- Do NOT make assumptions or introduce inaccuracies.\n"
             "- Avoid using specific job titles; refer to the position as **'this role'** throughout.\n"
-            "- Ensure clarity, conciseness, and engagement in the descriptions.\n"
-            "- Each version should be SUBSTANTIALLY different in tone, emphasis, and presentation.\n"
-            "- Maintain the same core requirements and essential functions across all versions.\n\n"
+            "- Each version should be unique, emphasizing different aspects of the role.\n"
+            "- Ensure clarity, conciseness, and engagement in the descriptions.\n\n"
             
             "### Structure for Each Job Description:\n"
             "**1. Role Overview:** A compelling and detailed explanation of this role's significance.\n"
@@ -86,233 +74,164 @@ class JobDescriptionAgent:
             "**3. Required Skills:** Essential technical and soft skills, with explanations of their importance.\n"
             "**4. Preferred Skills:** Additional skills that would be advantageous, with context on their relevance.\n"
             "**5. Required Experience:** The necessary experience levels, with examples of relevant past roles.\n"
-            "**6. Tools & Technologies:** Key tools, software, and technologies required for this role.\n"
-            "**7. Work Environment & Expectations:** Details on work conditions, methodologies, or collaboration requirements.\n\n"
-            
+            "**6. Preferred Experience:** Additional experience that would enhance performance in this role.\n"
+            "**7. Tools & Technologies:** Key tools, software, and technologies required for this role.\n"
+            "**8. Work Environment & Expectations:** Details on work conditions, methodologies, or collaboration requirements.\n\n"
+        
+            "Ensure each job description expands on the provided details, enhancing clarity and depth while maintaining industry relevance.\n\n"
             "### Required Format:\n"
-            "For each version, include:\n"
-            "1. The complete enhanced job description with all sections\n"
-            "2. A brief 'CHANGE SUMMARY' section at the end that explains the key enhancements and focus of this version\n\n"
-            
             "Present your response exactly as follows:\n\n"
             
-            "VERSION 1: TECHNICAL EXCELLENCE FOCUS\n"
+            "VERSION 1:\n"
             "[Complete first job description with all sections]\n\n"
-            "CHANGE SUMMARY 1:\n"
-            "[Brief summary of key changes and enhancements in this version]\n\n"
             
-            "VERSION 2: LEADERSHIP & IMPACT FOCUS\n"
+            "VERSION 2:\n"
             "[Complete second job description with all sections]\n\n"
-            "CHANGE SUMMARY 2:\n"
-            "[Brief summary of key changes and enhancements in this version]\n\n"
             
-            "VERSION 3: INNOVATION & GROWTH FOCUS\n"
+            "VERSION 3:\n"
             "[Complete third job description with all sections]\n\n"
-            "CHANGE SUMMARY 3:\n"
-            "[Brief summary of key changes and enhancements in this version]\n\n"
             
             f"### Original Job Description:\n{job_description}\n"
         )
+
+        model_response = self._invoke_bedrock_model(prompt)
         
         try:
-            model_response = self._invoke_bedrock_model(prompt)
-            
             if model_response and "content" in model_response and isinstance(model_response["content"], list):
                 full_text = model_response["content"][0]["text"].strip()
                 
-                # Parse versions using regex
-                import re
-                descriptions = []
-                version_pattern = re.compile(r'VERSION [1-3][^\n]*:(.*?)(?=VERSION [1-3]|CHANGE SUMMARY [1-3]:|$)', re.DOTALL)
-                summary_pattern = re.compile(r'CHANGE SUMMARY [1-3]:(.*?)(?=VERSION [1-3]|CHANGE SUMMARY [1-3]:|$)', re.DOTALL)
-                
-                version_matches = version_pattern.findall(full_text)
-                summary_matches = summary_pattern.findall(full_text)
-                
-                # Combine version content with its summary
-                for i, content in enumerate(version_matches[:3]):
-                    version_content = content.strip()
-                    summary = summary_matches[i].strip() if i < len(summary_matches) else "No summary provided."
-                    formatted_version = f"{version_content}\n\nCHANGE SUMMARY:\n{summary}"
-                    descriptions.append(formatted_version)
-                
-                if len(descriptions) == 3:
+                # More robust splitting pattern
+                parts = re.split(r'VERSION \d+:', full_text)
+                if len(parts) >= 4:  # The first part is empty or intro text
+                    descriptions = [part.strip() for part in parts[1:4]]
                     return descriptions
-                
-                # Ensure we return exactly 3 versions
-                while len(descriptions) < 3:
-                    default_content = f"Enhanced Version {len(descriptions)+1}:\n\n{job_description}\n\nCHANGE SUMMARY:\nBasic enhancement of original content."
-                    descriptions.append(default_content)
-                
-                return descriptions[:3]
-            else:
-                print(f"Unexpected model response format: {model_response}")
-                return [job_description] * 3  # Return original as fallback
-                
+                else:
+                    # Fallback parsing method
+                    descriptions = []
+                    version_pattern = re.compile(r'VERSION (\d+):(.*?)(?=VERSION \d+:|$)', re.DOTALL)
+                    matches = version_pattern.findall(full_text)
+                    for _, content in matches[:3]:
+                        descriptions.append(content.strip())
+                    
+                    if len(descriptions) == 3:
+                        return descriptions
         except Exception as e:
-            print(f"Error generating descriptions: {str(e)}")
-            return [job_description] * 3  # Return original as fallback
+            print(f"Error parsing generated descriptions: {e}")
+        
+        # If we failed to parse properly or encountered an error, generate simpler versions
+        return [
+            f"Enhanced Version 1 of the job description:\n{job_description}",
+            f"Enhanced Version 2 of the job description:\n{job_description}",
+            f"Enhanced Version 3 of the job description:\n{job_description}"
+        ]
 
-    def generate_final_description_structured(self, selected_description, feedback_history, jd_sections=None):
+    def generate_final_description(self, selected_description, feedback_history):
         """
-        Generate enhanced description incorporating feedback history, respecting JD structure
+        Generate enhanced description incorporating feedback history
         
         Args:
             selected_description (str): The base description to enhance
             feedback_history (list): List of previous feedback items
-            jd_sections (dict, optional): Dictionary of job description sections
-            
-        Returns:
-            str: Enhanced job description
         """
         # If client is not initialized properly, return the selected description
         if not self.client:
             return selected_description + "\n\n[Note: This would normally be enhanced based on your feedback, but the AI service connection is currently unavailable.]"
-                
-        # Compile feedback into a structured, categorized format
-        categorized_feedback = {
-            "Content": [],
-            "Structure": [],
-            "Clarity": [],
-            "Language": [],
-            "Technical": [],
-            "General": []
-        }
-        
-        # Process all feedback and categorize
-        for i, feedback_item in enumerate(feedback_history):
+            
+        # Construct prompt with feedback history
+        feedback_context = ""
+        for i, feedback_item in enumerate(feedback_history[:-1]):
             if isinstance(feedback_item, dict):
                 feedback_type = feedback_item.get("type", "General Feedback")
                 feedback_text = feedback_item.get("feedback", "")
-                
-                # Categorize feedback based on content
-                feedback_lower = feedback_text.lower()
-                
-                if any(term in feedback_lower for term in ["add", "include", "missing", "needs more", "require"]):
-                    categorized_feedback["Content"].append(f"({feedback_type}): {feedback_text}")
-                elif any(term in feedback_lower for term in ["organize", "format", "section", "layout", "bullet"]):
-                    categorized_feedback["Structure"].append(f"({feedback_type}): {feedback_text}")
-                elif any(term in feedback_lower for term in ["clear", "specific", "vague", "explain", "detail"]):
-                    categorized_feedback["Clarity"].append(f"({feedback_type}): {feedback_text}")
-                elif any(term in feedback_lower for term in ["tone", "wording", "phrase", "language"]):
-                    categorized_feedback["Language"].append(f"({feedback_type}): {feedback_text}")
-                elif any(term in feedback_lower for term in ["technical", "skill", "technology", "tool", "framework"]):
-                    categorized_feedback["Technical"].append(f"({feedback_type}): {feedback_text}")
-                else:
-                    categorized_feedback["General"].append(f"({feedback_type}): {feedback_text}")
+                feedback_context += f"Previous Feedback {i+1} ({feedback_type}): {feedback_text}\n\n"
             else:
-                # If feedback isn't a dict, place in general category
-                categorized_feedback["General"].append(f"Feedback {i+1}: {feedback_item}")
+                feedback_context += f"Previous Feedback {i+1}: {feedback_item}\n\n"
         
-        # Create consolidated feedback sections
-        feedback_sections = []
-        for category, items in categorized_feedback.items():
-            if items:
-                section = f"### {category} Feedback:\n"
-                for item in items:
-                    section += f"- {item}\n"
-                feedback_sections.append(section)
+        # Handle current feedback
+        current_feedback = ""
+        if feedback_history:
+            last_feedback = feedback_history[-1]
+            if isinstance(last_feedback, dict):
+                feedback_type = last_feedback.get("type", "General Feedback")
+                feedback_text = last_feedback.get("feedback", "")
+                current_feedback = f"({feedback_type}): {feedback_text}"
+            else:
+                current_feedback = last_feedback
         
-        # Combine all feedback sections
-        all_feedback = "\n".join(feedback_sections)
-        
-        # Create enhanced prompt for generating the final version
-        prompt = f"""
-    You are a senior talent acquisition specialist with expertise in crafting compelling, effective job descriptions
-    that attract high-quality candidates. Your task is to enhance the provided job description by applying all feedback
-    while maintaining accuracy and professional quality.
-    
-    ### JOB DESCRIPTION TO ENHANCE:
-    ```
-    {selected_description}
-    ```
-    
-    ### FEEDBACK TO IMPLEMENT:
-    {all_feedback}
-    
-    ### ENHANCEMENT APPROACH:
-    When enhancing this job description, follow this strategic approach:
-    
-    1. STRUCTURE & ORGANIZATION:
-       - Maintain clear section headings with logical flow
-       - Use bullet points for responsibilities and requirements
-       - Ensure consistent formatting throughout
-       - Create visual separation between sections for readability
-    
-    2. CONTENT ENHANCEMENT:
-       - Add specificity and detail to vague statements
-       - Incorporate all missing elements identified in feedback
-       - Ensure technical requirements are accurate and current
-       - Balance must-have vs. nice-to-have qualifications
-    
-    3. LANGUAGE OPTIMIZATION:
-       - Use active, engaging language throughout
-       - Replace generic terms with specific, measurable criteria
-       - Maintain a consistent, professional tone
-       - Use inclusive language that appeals to diverse candidates
-       - Keep the position referenced as "this role" throughout
-    
-    4. SECTION-SPECIFIC GUIDELINES:
-    """
-    
-        # Add section-specific guidelines if provided
-        if jd_sections and all(key in jd_sections for key in ['company_role', 'foundations', 'specific_requirements', 'preferences']):
-            prompt += """
-       - Company & Role Overview: Make minimal changes (10% modification) - focus on clarity improvements only
-       - Foundation Requirements: Make minimal changes (10% modification) - focus on clarity and relevance
-       - Specific Role Requirements: This is where most changes should occur (up to 90% modification) - focus on specificity and engagement
-       - Preferred Qualifications: Make minimal changes (10% modification) - focus on alignment with core requirements
-    """
-        else:
-            prompt += """
-       - Overview/Introduction: Focus on compelling value proposition and role context
-       - Responsibilities: Enhance with specific details and impact metrics
-       - Requirements: Clarify with precise technical and professional expectations
-       - Qualifications: Balance required vs. preferred for inclusivity
-    """
-    
-        prompt += """
-    5. QUALITY STANDARDS:
-       - Eliminate any jargon or unnecessary complexity
-       - Ensure all statements are accurate and verifiable
-       - Maintain authenticity while improving appeal
-       - Preserve all essential requirements from the original
-    
-    ### OUTPUT REQUIREMENTS:
-    1. Provide the complete enhanced job description incorporating ALL feedback points
-    2. Maintain the same overall structure as the original
-    3. Ensure the final description is polished, professional, and ready for immediate publication
-    4. Do not include explanations or commentary - only provide the finished job description
-    """
-    
-        try:
-            # Call the model with enhanced prompt
-            model_response = self._invoke_bedrock_model(prompt)
+        prompt = (
+            "You are an expert in job description refinement. Your task is to enhance the given job description "
+            "by incorporating all feedback while maintaining professional quality.\n\n"
             
+            f"### Selected Job Description to Enhance:\n{selected_description}\n\n"
+        )
+        if feedback_context:
+            prompt += f"### Previous Feedback Already Incorporated:\n{feedback_context}\n\n"
+        
+        if current_feedback:
+            prompt += f"### New Feedback to Implement:\n{current_feedback}\n\n"
+        
+        prompt += (
+                "### Guidelines:\n"
+                "- Implement all feedback while preserving the original core requirements\n"
+                "- Maintain clear section structure and professional language\n"
+                "- Continue referring to the position as 'this role'\n"
+                "- Produce a complete, refined job description ready for immediate use\n\n"
+                
+                "Return the complete enhanced job description incorporating all feedback."
+            )
+        
+        model_response = self._invoke_bedrock_model(prompt)
+        
+        try:
             if model_response and "content" in model_response and isinstance(model_response["content"], list):
-                enhanced_jd = model_response["content"][0]["text"].strip()
-                
-                # Check if the response starts with any common headers or markdown and remove them
-                common_headers = ["ENHANCED JOB DESCRIPTION:", "FINAL JOB DESCRIPTION:", "# ", "## "]
-                for header in common_headers:
-                    if enhanced_jd.startswith(header):
-                        enhanced_jd = enhanced_jd[len(header):].strip()
-                
-                # Remove any markdown code blocks if present
-                if enhanced_jd.startswith("```") and "```" in enhanced_jd[3:]:
-                    first_block_end = enhanced_jd[3:].find("```") + 6  # 3 + 3
-                    enhanced_jd = enhanced_jd[first_block_end:].strip()
-                
-                return enhanced_jd
-                
+                return model_response["content"][0]["text"].strip()
         except Exception as e:
             print(f"Error generating final description: {e}")
             
-        return selected_description + f"\n\n[Error generating final version: Unable to process feedback]"anced_jd[first_block_end:].st    rip()
-                
-            return enhanced_jd
-            
-    except Exception as e:
-        print(f"Error generating final description: {e}")
+        return selected_description + f"\n\n[Error generating final version: Unable to process feedback]"
+
+    def generate_version_summary(self, original_description, enhanced_description):
+        """
+        Generate a summary of changes between the original and enhanced job descriptions
         
-    return selected_description + f"\n\n[Error generating final version: Unable to process feedback]"
+        Args:
+            original_description (str): The original job description
+            enhanced_description (str): The enhanced job description
+            
+        Returns:
+            str: A paragraph summarizing the key changes
+        """
+        # If client is not initialized properly, return a simple summary
+        if not self.client:
+            return "Summary generation unavailable - AI service connection not available."
+                
+        # Construct prompt for the summary
+        prompt = (
+            "You are an expert at analyzing job descriptions. Given two versions of a job description "
+            "(original and enhanced), provide a brief paragraph summary of the key changes made.\n\n"
+            "Focus on important differences such as:\n"
+            "- Word count changes (if significant)\n"
+            "- Added or removed skills/requirements\n"
+            "- New sections or reorganization\n"
+            "- Tone or clarity improvements\n"
+            "- Any other notable changes\n\n"
+            
+            "Your summary should be a single paragraph of 3-5 sentences maximum, focusing only on the most "
+            "significant changes. Be specific about what was added or changed.\n\n"
+            
+            f"### Original Job Description:\n{original_description}\n\n"
+            f"### Enhanced Job Description:\n{enhanced_description}\n\n"
+            
+            "### Summary of Changes (3-5 sentences):\n"
+        )
+        
+        model_response = self._invoke_bedrock_model(prompt)
+        
+        try:
+            if model_response and "content" in model_response and isinstance(model_response["content"], list):
+                summary = model_response["content"][0]["text"].strip()
+                return summary
+        except Exception as e:
+            print(f"Error generating summary: {str(e)}")
+            
+        return "Unable to generate summary of changes."

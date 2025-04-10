@@ -9,3 +9,4 @@ nltk
 python-dateutil
 uuid
 openpyxl
+nltk==3.8.1

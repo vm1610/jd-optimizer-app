@@ -62,7 +62,7 @@ def render_role_selector(state_manager):
     """Render the role selector with state manager integration"""
     with st.container(border=True):
         # Define available roles (removing Team Lead)
-        roles = ["Recruiter", "Hiring Manager", "Employee", "HR Manager"]
+        roles = ["Recruiter", "Hiring Manager", "Employee"]
         
         # Get current role
         current_role = state_manager.get('role')

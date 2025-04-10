@@ -35,8 +35,8 @@ def render_jd_optimization_page(services):
         ##########################
         display_subsection_header("1. Select Job Description")
         
-        # Create a selection for the source type
-        source_options = ["📁 File Selection", "📤 Upload New", "🔍 Search Database"]
+        # Create a selection for the source type (merged File Selection and Upload into one option)
+        source_options = ["📁 Files", "🔍 Search Database"]
         selected_source = st.radio(
             "Choose job description source:",
             options=source_options,
@@ -123,8 +123,23 @@ def render_jd_optimization_page(services):
                         if selected_option:
                             job_description, job_details = job_search.find_job_description(selected_option)
                             
+                            # Check if job details were returned even if description wasn't found
+                            if job_details:
+                                # Display job details
+                                st.subheader("Job Details")
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    st.markdown(f"**Job ID:** {job_details.get('Job Id', 'N/A')}")
+                                    st.markdown(f"**Reference ID:** {job_details.get('Reference Id', 'N/A')}")
+                                    st.markdown(f"**Job Name:** {job_details.get('Job Name', 'N/A')}")
+                                with col2:
+                                    st.markdown(f"**Client:** {job_details.get('Client', 'N/A')}")
+                                    st.markdown(f"**Status:** {job_details.get('Status', 'N/A')}")
+                                    st.markdown(f"**Parent ID:** {job_details.get('Parent Id', 'N/A')}")
+                            
+                            # If we have an actual job description, show it and allow selection
                             if job_description:
-                                # Preview the job description first
+                                # Preview the job description
                                 st.subheader("Job Description Preview")
                                 with st.expander("View Job Description", expanded=True):
                                     st.text_area(
@@ -134,16 +149,6 @@ def render_jd_optimization_page(services):
                                         disabled=True,
                                         key="job_preview"
                                     )
-                                
-                                # Display job details in an expander
-                                with st.expander("Job Details", expanded=False):
-                                    col1, col2 = st.columns(2)
-                                    with col1:
-                                        st.markdown(f"**Job ID:** {job_details.get('Job Id', 'N/A')}")
-                                        st.markdown(f"**Reference ID:** {job_details.get('Reference Id', 'N/A')}")
-                                    with col2:
-                                        st.markdown(f"**Parent ID:** {job_details.get('Parent Id', 'N/A')}")
-                                        st.markdown(f"**ATS Position ID:** {job_details.get('ATS Position ID', 'N/A')}")
                                 
                                 # Confirm selection with a button
                                 if st.button("🔒 Select This Job Description", type="primary", key="confirm_job_selection"):
@@ -160,131 +165,137 @@ def render_jd_optimization_page(services):
                                     jd_selection_confirmed = True
                                     display_success_message(f"Job description '{selected_option}' selected!")
                             else:
-                                st.error("Could not find job description for the selected job.")
+                                # No job description was found
+                                st.error("No job description content found for this job. Please select another job with available content.")
                     else:
                         st.warning("No jobs match your search criteria.")
         
-        elif selected_source == "📁 File Selection":
-            jd_directory = os.path.join(os.getcwd(), "jd_optim_OOP_implement(vasu)/Data/JDs")
-            try:
-                # Create directory if it doesn't exist
-                os.makedirs(jd_directory, exist_ok=True)
-                
-                files = [f for f in os.listdir(jd_directory) if f.endswith(('.txt', '.docx'))]
-                
-                if files:
-                    selected_file = st.selectbox(
-                        "Select Job Description File", 
-                        files, 
-                        key="file_selector"
-                    )
-                    
-                    if selected_file:
-                        # Load selected file
-                        file_path = os.path.join(jd_directory, selected_file)
-                        
-                        try:
-                            file_content = read_job_description(file_path)
-                            
-                            # Preview the job description first
-                            st.subheader("Job Description Preview")
-                            with st.expander("View Job Description", expanded=True):
-                                st.text_area(
-                                    "Preview Content", 
-                                    file_content, 
-                                    height=250, 
-                                    disabled=True,
-                                    key="file_preview"
-                                )
-                            
-                            # Confirm selection with a button
-                            if st.button("🔒 Select This Job Description", type="primary", key="confirm_file_selection"):
-                                jd_content = file_content
-                                jd_source_name = selected_file
-                                jd_unique_id = f"file_{selected_file}"
-                                
-                                # Store in session state
-                                st.session_state.jd_content = jd_content
-                                st.session_state.jd_source_name = jd_source_name
-                                st.session_state.jd_unique_id = jd_unique_id
-                                st.session_state.jd_selection_confirmed = True
-                                
-                                jd_selection_confirmed = True
-                                display_success_message(f"Job description '{selected_file}' selected!")
-                        except Exception as e:
-                            st.error(f"Error reading file: {str(e)}")
-                else:
-                    st.info("No job description files found. Please upload one or create a new file.")
-            except Exception as e:
-                st.error(f"Error accessing JDs directory: {str(e)}")
-        
-        elif selected_source == "📤 Upload New":
-            uploaded_file = st.file_uploader(
-                "Upload Job Description File", 
-                type=['txt', 'docx'],
-                key="file_uploader"
-            )
+        elif selected_source == "📁 Files":
+            # Create tabs for existing files and uploading new files
+            file_col1, file_col2 = st.columns([1, 1])
             
-            if uploaded_file:
-                # Process uploaded file
+            with file_col1:
+                st.markdown("### Existing Files")
+                jd_directory = os.path.join(os.getcwd(), "jd_optim_OOP_implement(vasu)/Data/JDs")
                 try:
-                    if uploaded_file.name.endswith('.txt'):
-                        file_content = uploaded_file.getvalue().decode('utf-8')
-                    else:  # .docx
-                        try:
-                            from docx import Document
-                            # Save temporarily
-                            temp_path = f"temp_{uploaded_file.name}"
-                            with open(temp_path, 'wb') as f:
+                    # Create directory if it doesn't exist
+                    os.makedirs(jd_directory, exist_ok=True)
+                    
+                    # Get list of existing files
+                    files = [f for f in os.listdir(jd_directory) if f.endswith(('.txt', '.docx'))]
+                    
+                    if files:
+                        selected_file = st.selectbox(
+                            "Select Existing Job Description File", 
+                            files, 
+                            key="file_selector"
+                        )
+                        
+                        if selected_file:
+                            # Load selected file
+                            file_path = os.path.join(jd_directory, selected_file)
+                            
+                            try:
+                                file_content = read_job_description(file_path)
+                                
+                                # Preview the job description
+                                with st.expander("Preview Content", expanded=True):
+                                    st.text_area(
+                                        "File Content", 
+                                        file_content, 
+                                        height=250, 
+                                        disabled=True,
+                                        key="file_preview"
+                                    )
+                                
+                                # Confirm selection with a button
+                                if st.button("Select This File", type="primary", key="confirm_file_selection"):
+                                    jd_content = file_content
+                                    jd_source_name = selected_file
+                                    jd_unique_id = f"file_{selected_file}"
+                                    
+                                    # Store in session state
+                                    st.session_state.jd_content = jd_content
+                                    st.session_state.jd_source_name = jd_source_name
+                                    st.session_state.jd_unique_id = jd_unique_id
+                                    st.session_state.jd_selection_confirmed = True
+                                    
+                                    jd_selection_confirmed = True
+                                    display_success_message(f"Job description '{selected_file}' selected!")
+                            except Exception as e:
+                                st.error(f"Error reading file: {str(e)}")
+                    else:
+                        st.info("No job description files found. Please upload a new file.")
+                except Exception as e:
+                    st.error(f"Error accessing JDs directory: {str(e)}")
+            
+            with file_col2:
+                st.markdown("### Upload New File")
+                uploaded_file = st.file_uploader(
+                    "Upload Job Description File", 
+                    type=['txt', 'docx'],
+                    key="file_uploader"
+                )
+                
+                if uploaded_file:
+                    # Process uploaded file
+                    try:
+                        if uploaded_file.name.endswith('.txt'):
+                            file_content = uploaded_file.getvalue().decode('utf-8')
+                        else:  # .docx
+                            try:
+                                from docx import Document
+                                # Save temporarily
+                                temp_path = f"temp_{uploaded_file.name}"
+                                with open(temp_path, 'wb') as f:
+                                    f.write(uploaded_file.getvalue())
+                                
+                                # Read with python-docx
+                                doc = Document(temp_path)
+                                file_content = '\n'.join([paragraph.text for paragraph in doc.paragraphs])
+                                
+                                # Clean up
+                                if os.path.exists(temp_path):
+                                    os.remove(temp_path)
+                            except ImportError:
+                                st.error("python-docx package not found. Please install it to process DOCX files.")
+                                file_content = f"[Could not process DOCX file: {uploaded_file.name}]"
+                        
+                        # Preview the job description first
+                        with st.expander("Preview Content", expanded=True):
+                            st.text_area(
+                                "Uploaded Content", 
+                                file_content, 
+                                height=250, 
+                                disabled=True,
+                                key="upload_preview"
+                            )
+                        
+                        # Confirm selection with a button
+                        if st.button("Select This Upload", type="primary", key="confirm_upload_selection"):
+                            jd_content = file_content
+                            jd_source_name = uploaded_file.name
+                            jd_unique_id = f"upload_{uploaded_file.name}"
+                            
+                            # Store in session state
+                            st.session_state.jd_content = jd_content
+                            st.session_state.jd_source_name = jd_source_name
+                            st.session_state.jd_unique_id = jd_unique_id
+                            st.session_state.jd_selection_confirmed = True
+                            
+                            jd_selection_confirmed = True
+                            
+                            # Save to JDs directory for future use
+                            jd_dir = os.path.join(os.getcwd(), "jd_optim_OOP_implement(vasu)/Data/JDs")
+                            os.makedirs(jd_dir, exist_ok=True)
+                            save_path = os.path.join(jd_dir, uploaded_file.name)
+                            
+                            with open(save_path, 'wb') as f:
                                 f.write(uploaded_file.getvalue())
                             
-                            # Read with python-docx
-                            doc = Document(temp_path)
-                            file_content = '\n'.join([paragraph.text for paragraph in doc.paragraphs])
-                            
-                            # Clean up
-                            if os.path.exists(temp_path):
-                                os.remove(temp_path)
-                        except ImportError:
-                            st.error("python-docx package not found. Please install it to process DOCX files.")
-                            file_content = f"[Could not process DOCX file: {uploaded_file.name}]"
-                    
-                    # Preview the job description first
-                    st.subheader("Job Description Preview")
-                    with st.expander("View Uploaded Job Description", expanded=True):
-                        st.text_area(
-                            "Preview Content", 
-                            file_content, 
-                            height=250, 
-                            disabled=True,
-                            key="upload_preview"
-                        )
-                    
-                    # Confirm selection with a button
-                    if st.button("🔒 Select This Job Description", type="primary", key="confirm_upload_selection"):
-                        jd_content = file_content
-                        jd_source_name = uploaded_file.name
-                        jd_unique_id = f"upload_{uploaded_file.name}"
-                        
-                        # Store in session state
-                        st.session_state.jd_content = jd_content
-                        st.session_state.jd_source_name = jd_source_name
-                        st.session_state.jd_unique_id = jd_unique_id
-                        st.session_state.jd_selection_confirmed = True
-                        
-                        jd_selection_confirmed = True
-                        
-                        # Save to JDs directory for future use
-                        jd_dir = os.path.join(os.getcwd(), "jd_optim_OOP_implement(vasu)/Data/JDs")
-                        os.makedirs(jd_dir, exist_ok=True)
-                        save_path = os.path.join(jd_dir, uploaded_file.name)
-                        
-                        with open(save_path, 'wb') as f:
-                            f.write(uploaded_file.getvalue())
-                        
-                        display_success_message(f"Job description '{uploaded_file.name}' selected and saved for future use!")
-                except Exception as e:
-                    st.error(f"Error processing uploaded file: {str(e)}")
+                            display_success_message(f"Job description '{uploaded_file.name}' selected and saved for future use!")
+                    except Exception as e:
+                        st.error(f"Error processing uploaded file: {str(e)}")
         
         # Alternative: Check if we have a confirmed JD selection in session state
         if (not jd_selection_confirmed and not jd_content and 
@@ -431,6 +442,7 @@ def render_jd_optimization_page(services):
                     version_tabs = st.tabs(["Version 1", "Version 2", "Version 3"])
                     for idx, (tab, version) in enumerate(zip(version_tabs, enhanced_versions)):
                         with tab:
+                            # Display version content
                             st.text_area(
                                 f"Enhanced Version {idx + 1}",
                                 version,
@@ -439,7 +451,25 @@ def render_jd_optimization_page(services):
                                 key=f"enhanced_version_{idx}"
                             )
                             
-                            # Add download button for each version
+                            # Summary section
+                            st.markdown("### Version Summary")
+                            
+                            with st.spinner("Generating summary..."):
+                                # Generate summary using the agent
+                                summary = agent.generate_version_summary(jd_content, version)
+                                
+                                st.markdown(
+                                    f"""
+                                    <div style="background-color: #2D3748; padding: 12px; border-radius: 5px; border-left: 4px solid #4299E1; margin-bottom: 15px;">
+                                        <div style="color: #FFFFFF; font-size: 0.9em;">
+                                            {summary}
+                                        </div>
+                                    </div>
+                                    """, 
+                                    unsafe_allow_html=True
+                                )
+                            
+                            # Download button - ONLY ONE per version
                             st.download_button(
                                 label=f"Download Version {idx + 1}",
                                 data=version,
@@ -651,6 +681,46 @@ def render_jd_optimization_page(services):
                         key="final_description"
                     )
                     
+                    # Create two columns for the summaries
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.markdown("### Changes from Original")
+                        
+                        with st.spinner("Generating summary..."):
+                            # Generate summary compared to original
+                            summary_vs_original = agent.generate_version_summary(jd_content, final_version)
+                            
+                            st.markdown(
+                                f"""
+                                <div style="background-color: #2D3748; padding: 12px; border-radius: 5px; border-left: 4px solid #4299E1;">
+                                    <div style="color: #FFFFFF; font-size: 0.9em;">
+                                        {summary_vs_original}
+                                    </div>
+                                </div>
+                                """, 
+                                unsafe_allow_html=True
+                            )
+                    
+                    with col2:
+                        st.markdown(f"### Changes from Version {selected_index + 1}")
+                        
+                        with st.spinner("Generating summary..."):
+# Generate summary compared to base version
+                            base_version = enhanced_versions[selected_index]
+                            summary_vs_base = agent.generate_version_summary(base_version, final_version)
+                            
+                            st.markdown(
+                                f"""
+                                <div style="background-color: #2D3748; padding: 12px; border-radius: 5px; border-left: 4px solid #38A169;">
+                                    <div style="color: #FFFFFF; font-size: 0.9em;">
+                                        {summary_vs_base}
+                                    </div>
+                                </div>
+                                """, 
+                                unsafe_allow_html=True
+                            )
+                    
                     # Compare original vs final JD with skill analysis
                     display_subsection_header("📊 Final Analysis")
                     
@@ -763,7 +833,7 @@ def render_jd_optimization_page(services):
         else:
             # Show message if no JD is selected yet or selection not confirmed
             if selected_source:
-                st.info("Please select a job description and click 'Select This Job Description' to continue.")
+                st.info("Please select a job description and click the select button to continue.")
     
     # Feedback History Tab Content
     with main_tabs[1]:
