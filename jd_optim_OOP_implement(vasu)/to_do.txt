@@ -1,0 +1,27 @@
+# JD Agent - To-Do List
+
+## DONE ✅
+- Combined AI and manual creation into one tab
+- Added company info to all job descriptions
+- Added same perks and benefits section to all job descriptions
+- Made it so recruiters and hiring managers see the same screens
+- Save created JDs as templates for later
+- Added simple summaries of what each version changes
+- Got resume templates from Mischelle
+
+## TO DO 📝
+
+### Most Important
+- Focus on changing the skills/requirements section (3rd section) the most
+- Get previously developed components from Dev who worked on this before
+- Test the system with Sandhiya and Mischelle before wider release
+- Get more resume samples with different skills and backgrounds
+
+### Next Steps
+- Make sure JD improvements keep focus on right sections:
+  * First section (role): keep 90% the same
+  * Second section: keep 90% the same
+  * Third section (skills): change 85-90% (most important!)
+  * Last section (preferred): change about 10%
+
+Last Updated: April 10, 2025

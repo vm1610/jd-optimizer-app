@@ -135,25 +135,18 @@ def main():
     # Get current role
     current_role = state_manager.get('role')
     
-    # Role-specific tab configuration
+    # Role-specific tab configuration - UPDATED to give Recruiters access to JD Creation
     if current_role == "Employee":
         # Employee only sees Interview Prep
         tabs = ["Interview Prep"]
         state_manager.set('active_tab', "Interview Prep")
-    elif current_role == "Hiring Manager":
-        # Hiring Manager sees all tabs with JD Creation added
+    else:
+        # Both Recruiters and Hiring Managers see all tabs including JD Creation
         tabs = ["JD Creation", "JD Optimization", "Candidate Ranking", "Feedback Loop", "Interview Prep"]
         
-        # Default to JD Creation if coming from another role
+        # Default to JD Creation if coming from another role or if current tab is not in available tabs
         if state_manager.get('active_tab') not in tabs:
             state_manager.set('active_tab', "JD Creation")
-    else:
-        # Recruiter and HR Manager see all standard tabs
-        tabs = ["JD Optimization", "Candidate Ranking", "Feedback Loop", "Interview Prep"]
-        
-        # Ensure active tab is valid for this role
-        if state_manager.get('active_tab') not in tabs:
-            state_manager.set('active_tab', "JD Optimization")
     
     # Render tabs based on role
     render_role_specific_tabs(state_manager, tabs)
@@ -176,7 +169,7 @@ def main():
     # Render the appropriate page based on active tab
     active_tab = state_manager.get('active_tab')
     
-    if active_tab == "JD Creation" and current_role == "Hiring Manager":
+    if active_tab == "JD Creation":
         render_jd_creation_page(services)
     elif active_tab == "JD Optimization":
         render_jd_optimization_page(services)
