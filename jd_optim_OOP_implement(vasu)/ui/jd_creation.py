@@ -70,8 +70,6 @@ def render_jd_creation_page(services):
                 placeholder="e.g., Senior Software Engineer",
                 help="Enter the title for this position")
                 
-     
-
         # Creation method selection
         st.markdown("### Creation Method")
         creation_method = st.radio(
@@ -115,18 +113,6 @@ def render_jd_creation_page(services):
 
 ## Overview
 {overview}
-
-## Department
-{department}
-
-## Location
-{job_location}
-
-## Employment Type
-{job_type}
-
-## Experience Level
-{experience_level}
 
 ## Responsibilities
 {responsibilities}
@@ -173,41 +159,11 @@ def render_jd_creation_page(services):
                 else:
                     with st.spinner("Creating your job description with AI..."):
                         try:
-                            # Construct prompt for the AI
-                            prompt = f"""Create a comprehensive job description for a {job_title} position.
-
-Information:
-- Department: {department}
-- Experience Level: {experience_level}
-- Key Skills & Technologies: {key_skills}
-- Primary Responsibilities: {primary_responsibilities}
-- Location: {job_location}
-- Employment Type: {job_type}
-
-Please format the job description with the following sections:
-1. Overview
-2. Responsibilities
-3. Requirements
-4. Preferred Qualifications
-
-Make the job description engaging, detailed, and professional. Use bullet points for clarity.
-DO NOT include company information or benefits, as these will be added separately.
-"""
-                            
-                            # Call the agent to generate the JD
-                            if agent and agent.client:
-                                model_response = agent._invoke_bedrock_model(prompt)
-                                if model_response and "content" in model_response and isinstance(model_response["content"], list):
-                                    ai_content = model_response["content"][0]["text"].strip()
-                                else:
-                                    # Fallback if response format is unexpected
-                                    raise Exception("Unexpected response format from AI service")
-                            else:
-                                # Simulate response if agent is not available
-                                ai_content = f"""# {job_title}
+                            # Simulate AI response (fallback option)
+                            ai_content = f"""# {job_title}
 
 ## Overview
-We are seeking an experienced {job_title} to join our {department} team. This role will be responsible for developing and maintaining our core products, working with cross-functional teams to deliver high-quality solutions.
+We are seeking an experienced {job_title} to join our team. This role will be responsible for developing and maintaining our core products, working with cross-functional teams to deliver high-quality solutions.
 
 ## Responsibilities
 - Design, develop, and maintain applications using {key_skills}
@@ -217,7 +173,7 @@ We are seeking an experienced {job_title} to join our {department} team. This ro
 - {primary_responsibilities}
 
 ## Requirements
-- {experience_level} experience in software development
+- Experience in software development
 - Proficiency in {key_skills}
 - Strong problem-solving skills and attention to detail
 - Excellent communication and teamwork abilities
@@ -230,8 +186,51 @@ We are seeking an experienced {job_title} to join our {department} team. This ro
 - Understanding of software development best practices
 """
                             
-                            # Add company description and benefits
-                            complete_jd = f"# {job_title}\n\n{COMPANY_DESCRIPTION}\n\n{ai_content.split('# ')[1]}\n\n{STANDARD_BENEFITS}"
+                            # Try to use the agent if available, but use fallback if there's any issue
+                            if agent and agent.client:
+                                try:
+                                    # Construct prompt for the AI
+                                    prompt = f"""Create a comprehensive job description for a {job_title} position.
+
+Information:
+- Key Skills & Technologies: {key_skills}
+- Primary Responsibilities: {primary_responsibilities}
+
+Please format the job description with the following sections:
+1. Overview
+2. Responsibilities
+3. Requirements
+4. Preferred Qualifications
+
+Make the job description engaging, detailed, and professional. Use bullet points for clarity.
+DO NOT include company information or benefits, as these will be added separately.
+"""
+                                    model_response = agent._invoke_bedrock_model(prompt)
+                                    if model_response and "content" in model_response:
+                                        content_list = model_response.get("content", [])
+                                        if content_list and len(content_list) > 0 and "text" in content_list[0]:
+                                            ai_content = content_list[0]["text"].strip()
+                                            # Handle cases where AI returns content without the job title header
+                                            if not ai_content.startswith(f"# {job_title}"):
+                                                # Check if there's any markdown header
+                                                if not any(line.startswith("# ") for line in ai_content.split('\n')):
+                                                    ai_content = f"# {job_title}\n\n{ai_content}"
+                                except Exception as e:
+                                    st.info(f"Using fallback AI response: {str(e)}")
+                                    # Continue with fallback AI content
+                                    pass
+                            
+                            # Split the ai_content correctly to avoid index out of range
+                            content_parts = ai_content.split('# ')
+                            if len(content_parts) > 1:
+                                # Only use the part after the job title header if it exists
+                                main_content = content_parts[1]
+                            else:
+                                # Otherwise use the whole content
+                                main_content = ai_content
+                                
+                            # Add company description and benefits (safe way)
+                            complete_jd = f"# {job_title}\n\n{COMPANY_DESCRIPTION}\n\n{main_content}\n\n{STANDARD_BENEFITS}"
                             
                             # Add generated timestamp
                             complete_jd += f"\n\nGenerated: {datetime.datetime.now().strftime('%Y-%m-%d')}"
@@ -499,3 +498,5 @@ def show_download_options(state_manager, logger):
                 # Log if logger is available
                 if logger:
                     logger.log_download("docx", docx_filename)
+    else:
+        st.info("Create a job description first to enable save options.")

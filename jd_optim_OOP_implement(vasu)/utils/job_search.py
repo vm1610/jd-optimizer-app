@@ -172,7 +172,6 @@ class JobSearchUtility:
             client = str(row.get('Client', '')) if 'Client' in row else ''
             
             # Check if this job has a corresponding description
-            # First check if Parent Id exists in position_report_df
             has_description = False
             
             if 'Parent Id' in self.position_report_df.columns:
@@ -186,11 +185,6 @@ class JobSearchUtility:
                 elif any(self.position_report_df['Parent Id'].str.contains(job_id, na=False)):
                     has_description = True
             
-            # Check for description column directly
-            elif 'Job Description' in self.position_report_df.columns:
-                # Check if any non-empty descriptions exist
-                has_description = self.position_report_df['Job Description'].notna().any()
-            
             # Check for ATS Position ID match
             if not has_description and 'ATS Position ID' in self.position_report_df.columns and 'ATS Position ID' in row:
                 ats_id = str(row['ATS Position ID'])
@@ -201,20 +195,8 @@ class JobSearchUtility:
             if not has_description:
                 continue
             
-            # Get job status if available and add appropriate emoji
-            status_emoji = ""
-            if 'Job Status' in self.job_listings_df.columns:
-                status = str(row['Job Status']).lower()
-                if 'active' in status:
-                    status_emoji = "🟢 "  # Green circle for active
-                elif 'closed' in status:
-                    status_emoji = "🔴 "  # Red circle for closed
-                elif 'hold' in status:
-                    status_emoji = "🟠 "  # Orange circle for on hold
-                elif 'new' in status:
-                    status_emoji = "🔵 "  # Blue circle for new
-                else:
-                    status_emoji = "⚪ "  # White circle for unknown
+            # Get job status if available
+            status_emoji = "📄 "  # Default document emoji instead of colored circles
             
             # Format the dropdown option with status indicator
             option = f"{status_emoji}RRID{job_id}_{job_name}_{client}"
@@ -223,7 +205,6 @@ class JobSearchUtility:
             options.append(option)
         
         return options
-    
     def extract_ids_from_option(self, selected_option):
         """
         Extract Job Id and other IDs from the selected dropdown option

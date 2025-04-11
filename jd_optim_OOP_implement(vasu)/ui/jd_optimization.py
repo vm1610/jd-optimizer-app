@@ -11,6 +11,68 @@ from ui.common import (
 )
 from utils.file_utils import read_job_description
 
+def render_enhanced_versions_with_summaries(enhanced_versions, jd_content, agent):
+    """
+    Render enhanced versions with summaries displayed before the content
+    
+    Args:
+        enhanced_versions (list): List of enhanced versions
+        jd_content (str): Original JD content
+        agent: AI agent for generating summaries
+    """
+    # Create tabs for content and analysis
+    enhanced_tabs = st.tabs(["Enhanced Versions", "Analysis & Comparison"])
+    
+    # Show enhanced versions tab content
+    with enhanced_tabs[0]:
+        version_tabs = st.tabs(["Version 1", "Version 2", "Version 3"])
+        for idx, (tab, version) in enumerate(zip(version_tabs, enhanced_versions)):
+            with tab:
+                # Generate and display summary first
+                st.markdown("### Version Summary")
+                
+                with st.spinner("Generating summary..."):
+                    # Generate summary using the agent
+                    summary_text = agent.generate_version_summary(jd_content, version)
+                    
+                    # Process summary into bullet points if it's not already in that format
+                    if not summary_text.strip().startswith("•"):
+                        # Split into sentences and convert to bullet points
+                        sentences = [s.strip() for s in summary_text.split('.') if s.strip()]
+                        bullet_summary = "\n".join([f"• {sentence}." for sentence in sentences if sentence])
+                    else:
+                        bullet_summary = summary_text
+                    
+                    st.markdown(
+                        f"""
+                        <div style="background-color: #2D3748; padding: 12px; border-radius: 5px; border-left: 4px solid #4299E1; margin-bottom: 15px;">
+                            <div style="color: #FFFFFF; font-size: 0.9em;">
+                                {bullet_summary}
+                            </div>
+                        </div>
+                        """, 
+                        unsafe_allow_html=True
+                    )
+                
+                # Display version content AFTER the summary
+                st.text_area(
+                    f"Enhanced Version {idx + 1}",
+                    version,
+                    height=300,
+                    disabled=True,
+                    key=f"enhanced_version_{idx}"
+                )
+                
+                # Download button - ONLY ONE per version
+                st.download_button(
+                    label=f"Download Version {idx + 1}",
+                    data=version,
+                    file_name=f"enhanced_jd_version_{idx+1}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                    mime="text/plain",
+                    key=f"download_version_{idx}"
+                )
+
+
 def render_jd_optimization_page(services):
     """
     Render the unified JD Optimization page with optimized performance by using cached results
@@ -56,19 +118,13 @@ def render_jd_optimization_page(services):
             job_search_initialized = render_job_search_section(state_manager)
             
             # Add status color coding info box
-            status_info_expander = st.expander("📊 Job Status Color Coding", expanded=False)
+            status_info_expander = st.expander("📊 Job Status Information", expanded=False)
             with status_info_expander:
                 st.markdown("""
                 <div style="background-color: #2D3748; padding: 15px; border-radius: 5px; margin-bottom: 10px;">
-                    <h4 style="margin-top: 0;">Job Status Indicators</h4>
-                    <p>The following color indicators show the current status of each job:</p>
-                    <ul style="list-style-type: none; padding-left: 5px;">
-                        <li style="margin-bottom: 8px;"><span style="font-size: 1.2em;">🟢</span> <strong>Active</strong> - Job is currently open and accepting applications</li>
-                        <li style="margin-bottom: 8px;"><span style="font-size: 1.2em;">🔴</span> <strong>Closed</strong> - Job is no longer accepting applications</li>
-                        <li style="margin-bottom: 8px;"><span style="font-size: 1.2em;">🟠</span> <strong>On Hold</strong> - Job is temporarily paused</li>
-                        <li style="margin-bottom: 8px;"><span style="font-size: 1.2em;">🔵</span> <strong>New</strong> - Job was recently posted</li>
-                        <li style="margin-bottom: 8px;"><span style="font-size: 1.2em;">⚪</span> <strong>Unknown</strong> - Job status not specified</li>
-                    </ul>
+                    <h4 style="margin-top: 0;">Available Jobs</h4>
+                    <p>Only jobs with available job descriptions are shown in the dropdown.</p>
+                    <p>If you don't see a specific job, it may not have an associated job description in the system.</p>
                 </div>
                 """, unsafe_allow_html=True)
             
@@ -434,51 +490,11 @@ def render_jd_optimization_page(services):
             
             # Display enhanced versions if available
             if enhanced_versions:
-                # Create tabs for content and analysis
-                enhanced_tabs = st.tabs(["Enhanced Versions", "Analysis & Comparison"])
-                
-                # Show enhanced versions tab content
-                with enhanced_tabs[0]:
-                    version_tabs = st.tabs(["Version 1", "Version 2", "Version 3"])
-                    for idx, (tab, version) in enumerate(zip(version_tabs, enhanced_versions)):
-                        with tab:
-                            # Display version content
-                            st.text_area(
-                                f"Enhanced Version {idx + 1}",
-                                version,
-                                height=300,
-                                disabled=True,
-                                key=f"enhanced_version_{idx}"
-                            )
-                            
-                            # Summary section
-                            st.markdown("### Version Summary")
-                            
-                            with st.spinner("Generating summary..."):
-                                # Generate summary using the agent
-                                summary = agent.generate_version_summary(jd_content, version)
-                                
-                                st.markdown(
-                                    f"""
-                                    <div style="background-color: #2D3748; padding: 12px; border-radius: 5px; border-left: 4px solid #4299E1; margin-bottom: 15px;">
-                                        <div style="color: #FFFFFF; font-size: 0.9em;">
-                                            {summary}
-                                        </div>
-                                    </div>
-                                    """, 
-                                    unsafe_allow_html=True
-                                )
-                            
-                            # Download button - ONLY ONE per version
-                            st.download_button(
-                                label=f"Download Version {idx + 1}",
-                                data=version,
-                                file_name=f"enhanced_jd_version_{idx+1}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-                                mime="text/plain",
-                                key=f"download_version_{idx}"
-                            )
+                # Use our custom function to render enhanced versions with summaries
+                render_enhanced_versions_with_summaries(enhanced_versions, jd_content, agent)
                 
                 # Show analysis & comparison tab content
+                enhanced_tabs = st.tabs(["Enhanced Versions", "Analysis & Comparison"])
                 with enhanced_tabs[1]:
                     # Analyze all versions
                     original_scores = analyzer.analyze_text(jd_content)
@@ -691,11 +707,19 @@ def render_jd_optimization_page(services):
                             # Generate summary compared to original
                             summary_vs_original = agent.generate_version_summary(jd_content, final_version)
                             
+                            # Process summary into bullet points if it's not already in that format
+                            if not summary_vs_original.strip().startswith("•"):
+                                # Split into sentences and convert to bullet points
+                                sentences = [s.strip() for s in summary_vs_original.split('.') if s.strip()]
+                                bullet_summary = "\n".join([f"• {sentence}." for sentence in sentences if sentence])
+                            else:
+                                bullet_summary = summary_vs_original
+                            
                             st.markdown(
                                 f"""
                                 <div style="background-color: #2D3748; padding: 12px; border-radius: 5px; border-left: 4px solid #4299E1;">
                                     <div style="color: #FFFFFF; font-size: 0.9em;">
-                                        {summary_vs_original}
+                                        {bullet_summary}
                                     </div>
                                 </div>
                                 """, 
@@ -706,15 +730,23 @@ def render_jd_optimization_page(services):
                         st.markdown(f"### Changes from Version {selected_index + 1}")
                         
                         with st.spinner("Generating summary..."):
-# Generate summary compared to base version
+                            # Generate summary compared to base version
                             base_version = enhanced_versions[selected_index]
                             summary_vs_base = agent.generate_version_summary(base_version, final_version)
+                            
+                            # Process summary into bullet points if it's not already in that format
+                            if not summary_vs_base.strip().startswith("•"):
+                                # Split into sentences and convert to bullet points
+                                sentences = [s.strip() for s in summary_vs_base.split('.') if s.strip()]
+                                bullet_summary = "\n".join([f"• {sentence}." for sentence in sentences if sentence])
+                            else:
+                                bullet_summary = summary_vs_base
                             
                             st.markdown(
                                 f"""
                                 <div style="background-color: #2D3748; padding: 12px; border-radius: 5px; border-left: 4px solid #38A169;">
                                     <div style="color: #FFFFFF; font-size: 0.9em;">
-                                        {summary_vs_base}
+                                        {bullet_summary}
                                     </div>
                                 </div>
                                 """, 
