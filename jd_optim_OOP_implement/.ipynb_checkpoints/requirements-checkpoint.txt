@@ -1,0 +1,12 @@
+streamlit
+boto3
+pandas
+numpy
+python-docx
+plotly
+scikit-learn
+nltk
+python-dateutil
+uuid
+openpyxl
+nltk==3.8.1
